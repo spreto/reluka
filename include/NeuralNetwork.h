@@ -40,25 +40,36 @@ class NeuralNetwork
         void printPwlFile();
 
     private:
+        string pwlFileName;
+
         vector<Layer> net;
 
         vector<RegionalLinearPiece> rlPieces;
         vector<BoundaryPrototype> boundProts;
-        bool multithreading;
         bool pwlTranslation = false;
-        mutex multithreadingMutex;
 
-        string pwlFileName;
+        mutex multithreadingMutex; // A SER EXCLUÍDO!
+        mutex rlPiecesMutex;
+        mutex boundProtsMutex;
+        bool multithreading;
 
         lpcNonNegative gcd(lpcNonNegative a, lpcNonNegative b);
         LinearPieceCoefficient dec2frac(const NodeCoeff& decValue);
-        BoundProtPosition boundProtPosition(BoundProtIndex bIdx);
-        bool feasibleBoundsWithExtra(const vector<Boundary>& bounds, const vector<Boundary>& extraBounds);
-        bool feasibleBounds(const vector<Boundary>& bounds);
-        void iterate_mthreading(vector<vector<Boundary>>& fBounds, const vector<Boundary>& cBounds, vector<Boundary> tBounds, BoundProtIndex fbpIdx, const vector<BoundProtPosition>& pos, unsigned posIdx);
 
-        void net2pwl_mthreading(const vector<Node>& previousInfo, const vector<Boundary>& currentBounds, unsigned layerNum);
-        void net2pwl_singleThread(const vector<Node>& previousInfo, const vector<Boundary>& currentBounds, unsigned layerNum);
+        BoundProtPosition boundProtPosition(BoundProtIndex bIdx);
+        bool feasibleBounds(const vector<Boundary>& bounds);
+        bool feasibleBoundsWithExtra(const vector<Boundary>& bounds, const vector<Boundary>& extraBounds);
+
+        vector<BoundaryPrototype> composeBoundProts(const vector<BoundaryPrototype>& inputValues, unsigned layerNum);
+        void writeBoundProts(const vector<BoundaryPrototype>& newBoundProts);
+        void writeRegionalLinearPieces(const vector<BoundaryPrototype>& inputValues, const vector<Boundary>& currentBounds, BoundProtIndex newBoundProtFirstIdx);
+
+        void iterate(vector<unsigned>& iteration, int& currentIterationIdx, const vector<BoundProtPosition>& boundProtPositions, vector<Boundary>& bounds);
+        void net2pwl(const vector<BoundaryPrototype>& inputValues, const vector<Boundary>& currentBounds, unsigned layerNum);
+
+        void iterate_mthreading(const vector<BoundaryPrototype>& newBoundProts, const vector<Boundary>& currentBounds, vector<Boundary> tBounds, BoundProtIndex fbpIdx, const vector<BoundProtPosition>& boundProtPositions, unsigned posIdx, unsigned layerNum);
+        void net2pwl_mthreading(const vector<BoundaryPrototype>& inputValues, const vector<Boundary>& currentBounds, unsigned layerNum);
+
         void net2pwl();
 };
 
