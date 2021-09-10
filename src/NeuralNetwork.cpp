@@ -1,5 +1,6 @@
 #include <fstream>
-#include <thread>
+#include <cmath>
+#include <future>
 #include "soplex.h"
 #include "NeuralNetwork.h"
 
@@ -8,13 +9,15 @@
 using namespace std;
 using namespace soplex;
 
-NeuralNetwork::NeuralNetwork(const vector<Layer>& inputNet, string onnxFileName, bool mth) :
-    net(inputNet), multithreading(mth)
+NeuralNetwork::NeuralNetwork(const vector<Layer>& inputNet, string onnxFileName, bool multithreading) :
+    net(inputNet)
 {
     if ( onnxFileName.substr(onnxFileName.size()-5,5) == ".onnx" )
         pwlFileName = onnxFileName.substr(0,onnxFileName.size()-5);
     else
         pwlFileName = onnxFileName;
+
+    processingMode = ( multithreading ? Multi : Single );
 
     pwlFileName.append(".pwl");
 }
@@ -35,7 +38,7 @@ lpcNonNegative NeuralNetwork::gcd(lpcNonNegative a, lpcNonNegative b)
         return gcd(b, a % b);
 }
 
-LinearPieceCoefficient NeuralNetwork::dec2frac(const NodeCoeff& decValue)
+LinearPieceCoefficient NeuralNetwork::dec2frac(NodeCoeff decValue)
 {
     lpcNonNegative whole;
     bool negFactor = false;
@@ -58,14 +61,14 @@ LinearPieceCoefficient NeuralNetwork::dec2frac(const NodeCoeff& decValue)
     return LinearPieceCoefficient(numerator, denominator);
 }
 
-BoundProtPosition NeuralNetwork::boundProtPosition(BoundProtIndex bIdx)
+BoundProtPosition NeuralNetwork::boundProtPosition(const vector<BoundaryPrototype>& boundProts, BoundProtIndex bIdx)
 {
     SoPlex sop;
 
     BoundaryCoefficient K = -boundProts.at(bIdx).at(0);
 
     DSVector dummycol(0);
-    for ( auto i = 1; i < boundProts.at(bIdx).size(); i++ )
+    for ( size_t i = 1; i < boundProts.at(bIdx).size(); i++ )
         sop.addColReal(LPCol(boundProts.at(bIdx).at(i), dummycol, 1, 0));
 
     sop.setIntParam(SoPlex::VERBOSITY, SoPlex::VERBOSITY_ERROR);
@@ -85,36 +88,24 @@ BoundProtPosition NeuralNetwork::boundProtPosition(BoundProtIndex bIdx)
         return Cutting;
 }
 
-bool NeuralNetwork::feasibleBoundsWithExtra(const vector<Boundary>& bounds, const vector<Boundary>& extraBounds)
+bool NeuralNetwork::feasibleBounds(const vector<BoundaryPrototype>& boundProts, const vector<Boundary>& bounds)
 {
     SoPlex sop;
 
     DSVector dummycol(0);
-    for ( auto i = 1; i <= net.at(0).at(0).size()-1; i++ )
+    for ( size_t i = 1; i <= net.at(0).at(0).size()-1; i++ )
         sop.addColReal(LPCol(0, dummycol, 1, 0));
 
     DSVector row(net.at(0).size());
-    for ( auto i = 0; i < bounds.size(); i++ )
+    for ( size_t i = 0; i < bounds.size(); i++ )
     {
-        for ( auto j = 1; j <= net.at(0).at(0).size()-1; j++ )
+        for ( size_t j = 1; j <= net.at(0).at(0).size()-1; j++ )
             row.add(j-1, boundProts.at(bounds.at(i).first).at(j));
 
         if ( bounds.at(i).second == GeqZero )
             sop.addRowReal(LPRow(-boundProts.at(bounds.at(i).first).at(0), row, infinity));
         else if ( bounds.at(i).second == LeqZero )
             sop.addRowReal(LPRow(-infinity, row, -boundProts.at(bounds.at(i).first).at(0)));
-
-        row.clear();
-    }
-    for ( auto i = 0; i < extraBounds.size(); i++ )
-    {
-        for ( auto j = 1; j <= net.at(0).at(0).size()-1; j++ )
-            row.add(j-1, boundProts.at(extraBounds.at(i).first).at(j));
-
-        if ( extraBounds.at(i).second == GeqZero )
-            sop.addRowReal(LPRow(-boundProts.at(extraBounds.at(i).first).at(0), row, infinity));
-        else if ( extraBounds.at(i).second == LeqZero )
-            sop.addRowReal(LPRow(-infinity, row, -boundProts.at(extraBounds.at(i).first).at(0)));
 
         row.clear();
     }
@@ -130,21 +121,15 @@ bool NeuralNetwork::feasibleBoundsWithExtra(const vector<Boundary>& bounds, cons
         return true;
 }
 
-bool NeuralNetwork::feasibleBounds(const vector<Boundary>& bounds)
-{
-    vector<Boundary> dummyExtraBounds;
-    return feasibleBoundsWithExtra(bounds, dummyExtraBounds);
-}
-
 vector<BoundaryPrototype> NeuralNetwork::composeBoundProts(const vector<BoundaryPrototype>& inputValues, unsigned layerNum)
 {
     vector<BoundaryPrototype> newBoundProts;
 
-    for ( auto i = 0; i < net.at(layerNum).size(); i++ )
+    for ( size_t i = 0; i < net.at(layerNum).size(); i++ )
     {
         BoundaryPrototype auxBoundProt;
 
-        for ( auto j = 0; j < inputValues.at(0).size(); j++ )
+        for ( size_t j = 0; j < inputValues.at(0).size(); j++ )
         {
             BoundaryCoefficient auxCoeff;
 
@@ -153,7 +138,7 @@ vector<BoundaryPrototype> NeuralNetwork::composeBoundProts(const vector<Boundary
             else
                 auxCoeff = 0;
 
-            for ( auto k = 0; k < inputValues.size(); k++ )
+            for ( size_t k = 0; k < inputValues.size(); k++ )
                 auxCoeff = auxCoeff + inputValues.at(k).at(j) * net.at(layerNum).at(i).at(k+1);
 
             auxBoundProt.push_back(auxCoeff);
@@ -165,13 +150,13 @@ vector<BoundaryPrototype> NeuralNetwork::composeBoundProts(const vector<Boundary
     return newBoundProts;
 }
 
-void NeuralNetwork::writeBoundProts(const vector<BoundaryPrototype>& newBoundProts)
+void NeuralNetwork::writeBoundProts(vector<BoundaryPrototype>& boundProts, const vector<BoundaryPrototype>& newBoundProts)
 {
-    for ( auto i = 0; i < newBoundProts.size(); i++ )
+    for ( size_t i = 0; i < newBoundProts.size(); i++ )
     {
         BoundaryPrototype auxBoundProt;
 
-        for ( auto j = 0; j < newBoundProts.at(0).size(); j++ )
+        for ( size_t j = 0; j < newBoundProts.at(0).size(); j++ )
         {
             BoundaryCoefficient auxCoeff;
             auxCoeff = newBoundProts.at(i).at(j);
@@ -182,14 +167,42 @@ void NeuralNetwork::writeBoundProts(const vector<BoundaryPrototype>& newBoundPro
     }
 }
 
-void NeuralNetwork::writeRegionalLinearPieces(const vector<BoundaryPrototype>& inputValues, const vector<Boundary>& currentBounds, BoundProtIndex newBoundProtFirstIdx)
+vector<BoundaryPrototype> NeuralNetwork::composeOutputValues(const vector<BoundaryPrototype>& boundProts,
+                                                             const vector<BoundarySymbol>& iteration,
+                                                             const vector<BoundProtPosition>& boundProtPositions)
+{
+    vector<BoundaryPrototype> outputValues = boundProts;
+
+    for ( size_t j = 0; j < iteration.size(); j++ )
+    {
+        if ( boundProtPositions.at(j) == Cutting )
+        {
+            if ( iteration.at(j) == LeqZero )
+                for ( size_t k = 0; k < outputValues.at(0).size(); k++ )
+                    outputValues.at(j).at(k) = 0;
+        }
+        else if ( boundProtPositions.at(j) == Under )
+        {
+            for ( size_t k = 0; k < outputValues.at(0).size(); k++ )
+                outputValues.at(j).at(k) = 0;
+        }
+    }
+
+    return outputValues;
+}
+
+void NeuralNetwork::writeRegionalLinearPieces(vector<RegionalLinearPiece>& rlPieces,
+                                              const vector<BoundaryPrototype>& boundProts,
+                                              const vector<BoundaryPrototype>& inputValues,
+                                              const vector<Boundary>& currentBounds,
+                                              BoundProtIndex newBoundProtFirstIdx)
 {
     RegionalLinearPiece rlp0;
     rlp0.bounds = currentBounds;
     rlp0.bounds.push_back(Boundary(newBoundProtFirstIdx, LeqZero));
-    if ( feasibleBounds(rlp0.bounds) )
+    if ( feasibleBounds(boundProts, rlp0.bounds) )
     {
-        for ( auto i = 0; i < inputValues.at(0).size(); i++ )
+        for ( size_t i = 0; i < inputValues.at(0).size(); i++ )
             rlp0.coefs.push_back(LinearPieceCoefficient(0,1));
         rlPieces.push_back(rlp0);
     }
@@ -198,9 +211,9 @@ void NeuralNetwork::writeRegionalLinearPieces(const vector<BoundaryPrototype>& i
     rlp0_1.bounds = currentBounds;
     rlp0_1.bounds.push_back(Boundary(newBoundProtFirstIdx, GeqZero));
     rlp0_1.bounds.push_back(Boundary(newBoundProtFirstIdx+1, LeqZero));
-    if ( feasibleBounds(rlp0_1.bounds) )
-    { //for ( auto i = 0; i < rlp0_1.bounds.size(); i++ ) cout << rlp0_1.bounds.at(i).first << " " << rlp0_1.bounds.at(i).second << " | "; cout << endl;
-        for ( auto i = 0; i < inputValues.at(0).size(); i++ )
+    if ( feasibleBounds(boundProts, rlp0_1.bounds) )
+    {
+        for ( size_t i = 0; i < inputValues.at(0).size(); i++ )
             rlp0_1.coefs.push_back(dec2frac(inputValues.at(0).at(i)));
         rlPieces.push_back(rlp0_1);
     }
@@ -208,38 +221,60 @@ void NeuralNetwork::writeRegionalLinearPieces(const vector<BoundaryPrototype>& i
     RegionalLinearPiece rlp1;
     rlp1.bounds = currentBounds;
     rlp1.bounds.push_back(Boundary(newBoundProtFirstIdx+1, GeqZero));
-    if ( feasibleBounds(rlp1.bounds) )
+
+    if ( feasibleBounds(boundProts, rlp1.bounds) )
     {
         rlp1.coefs.push_back(LinearPieceCoefficient(1,1));
-        for ( auto i = 1; i < inputValues.at(0).size(); i++ )
+        for ( size_t i = 1; i < inputValues.at(0).size(); i++ )
             rlp1.coefs.push_back(LinearPieceCoefficient(0,1));
         rlPieces.push_back(rlp1);
     }
 }
 
-void NeuralNetwork::iterate(vector<unsigned>& iteration, int& currentIterationIdx, const vector<BoundProtPosition>& boundProtPositions, vector<Boundary>& bounds)
+bool NeuralNetwork::iterate(size_t limitIterationIdx,
+                            vector<BoundarySymbol>& iteration,
+                            size_t& currentIterationIdx,
+                            const vector<BoundProtPosition>& boundProtPositions,
+                            vector<Boundary>& bounds)
 {
     bool iterating = true;
 
-    while ( iterating && ( currentIterationIdx >= 0 ) )
+    while ( iterating )
     {
         if ( boundProtPositions.at(currentIterationIdx) == Cutting )
             bounds.pop_back();
 
-        if ( ( boundProtPositions.at(currentIterationIdx) == Cutting ) && ( iteration.at(currentIterationIdx) == 0 ) )
+        if ( ( boundProtPositions.at(currentIterationIdx) == Cutting ) && ( iteration.at(currentIterationIdx) == GeqZero ) )
         {
-            iteration.at(currentIterationIdx)++;
+            iteration.at(currentIterationIdx) = LeqZero;
             iterating = false;
         }
         else
         {
-            iteration.at(currentIterationIdx) = 0;
-            currentIterationIdx--;
+            iteration.at(currentIterationIdx) = GeqZero;
+            if ( currentIterationIdx > limitIterationIdx )
+                currentIterationIdx--;
+            else
+                return false;
         }
     }
+
+    return true;
 }
 
-void NeuralNetwork::net2pwl(const vector<BoundaryPrototype>& inputValues, const vector<Boundary>& currentBounds, unsigned layerNum)
+bool NeuralNetwork::iterate(vector<BoundarySymbol>& iteration,
+                            size_t& currentIterationIdx,
+                            const vector<BoundProtPosition>& boundProtPositions,
+                            vector<Boundary>& bounds)
+{
+    return iterate(0, iteration, currentIterationIdx, boundProtPositions, bounds);
+}
+
+void NeuralNetwork::net2pwl(vector<BoundaryPrototype>& boundProts,
+                            vector<RegionalLinearPiece>& rlPieces,
+                            const vector<BoundaryPrototype>& inputValues,
+                            const vector<Boundary>& currentBounds,
+                            size_t layerNum)
 {
     vector<BoundaryPrototype> newBoundProts;
 
@@ -248,204 +283,234 @@ void NeuralNetwork::net2pwl(const vector<BoundaryPrototype>& inputValues, const 
     else
         newBoundProts = composeBoundProts(inputValues, layerNum);
 
-    BoundProtIndex newBoundProtFirstIdx = boundProts.size();
-    writeBoundProts(newBoundProts);
+    BoundProtIndex newBoundProtsFirstIdx = boundProts.size();
+    writeBoundProts(boundProts, newBoundProts);
 
     if ( layerNum + 1 == net.size() )
     {
-        boundProts.push_back(boundProts.at(newBoundProtFirstIdx));
-        boundProts.at(newBoundProtFirstIdx+1).at(0) = boundProts.at(newBoundProtFirstIdx+1).at(0) - 1;
+        boundProts.push_back(boundProts.at(newBoundProtsFirstIdx));
+        boundProts.at(newBoundProtsFirstIdx + 1).at(0) = boundProts.at(newBoundProtsFirstIdx + 1).at(0) - 1;
 
-        writeRegionalLinearPieces(newBoundProts, currentBounds, newBoundProtFirstIdx);
+        writeRegionalLinearPieces(rlPieces, boundProts, newBoundProts, currentBounds, newBoundProtsFirstIdx);
     }
     else
     {
         vector<BoundProtPosition> boundProtPositions;
-        vector<unsigned> iteration(newBoundProts.size(), 0);
+        vector<BoundarySymbol> iteration(newBoundProts.size(), GeqZero);
 
-        for ( auto i = newBoundProtFirstIdx; i < newBoundProtFirstIdx + newBoundProts.size(); i++ )
-            boundProtPositions.push_back( boundProtPosition(i) );
+        for ( size_t i = newBoundProtsFirstIdx; i < newBoundProtsFirstIdx + newBoundProts.size(); i++ )
+            boundProtPositions.push_back( boundProtPosition(boundProts, i) );
 
-        int currentIterationIdx = 0;
+        size_t currentIterationIdx = 0;
+        bool iterated = true;
         vector<Boundary> auxCurrentBounds = currentBounds;
 
-        while ( currentIterationIdx >= 0 )
+        while ( iterated )
         {
-            vector<BoundaryPrototype> outputValues = newBoundProts;
-
-            while ( ( currentIterationIdx < iteration.size() ) && ( currentIterationIdx >= 0 ) )
+            while ( ( iterated ) && ( currentIterationIdx < iteration.size() ) )
             {
                 if ( boundProtPositions.at(currentIterationIdx) != Cutting )
                     currentIterationIdx++;
                 else
                 {
-                    if ( iteration.at(currentIterationIdx) == 1 )
-                        auxCurrentBounds.push_back( Boundary(newBoundProtFirstIdx+currentIterationIdx,GeqZero) );
+                    if ( iteration.at(currentIterationIdx) == GeqZero )
+                        auxCurrentBounds.push_back( Boundary(newBoundProtsFirstIdx + currentIterationIdx, GeqZero) );
                     else
-                        auxCurrentBounds.push_back( Boundary(newBoundProtFirstIdx+currentIterationIdx,LeqZero) );
+                        auxCurrentBounds.push_back( Boundary(newBoundProtsFirstIdx + currentIterationIdx, LeqZero) );
 
-                    if ( feasibleBounds( auxCurrentBounds ) )
+                    if ( feasibleBounds(boundProts, auxCurrentBounds) )
                         currentIterationIdx++;
                     else
-                        iterate(iteration, currentIterationIdx, boundProtPositions, auxCurrentBounds);
+                        iterated = iterate(iteration, currentIterationIdx, boundProtPositions, auxCurrentBounds);
                 }
             }
 
-            if ( currentIterationIdx >= 0 )
+            if ( iterated )
             {
-                for ( auto j = 0; j < iteration.size(); j++ )
-                {
-                    if ( boundProtPositions.at(j) == Cutting )
-                    {
-                        if ( iteration.at(j) == 0 )
-                            for ( auto k = 0; k < outputValues.at(0).size(); k++ )
-                                outputValues.at(j).at(k) = 0;
-                    }
-                    else if ( boundProtPositions.at(j) == Under )
-                    {
-                        for ( auto k = 0; k < outputValues.at(0).size(); k++ )
-                            outputValues.at(j).at(k) = 0;
-                    }
-                }
+                vector<BoundaryPrototype> outputValues = composeOutputValues(newBoundProts, iteration, boundProtPositions);
 
-                net2pwl(outputValues, auxCurrentBounds, layerNum+1);
+                net2pwl(boundProts, rlPieces, outputValues, auxCurrentBounds, layerNum+1);
 
                 currentIterationIdx--;
-                iterate(iteration, currentIterationIdx, boundProtPositions, auxCurrentBounds);
+                iterated = iterate(iteration, currentIterationIdx, boundProtPositions, auxCurrentBounds);
             }
         }
     }
 }
 
-void NeuralNetwork::iterate_mthreading(const vector<BoundaryPrototype>& newBoundProts, const vector<Boundary>& currentBounds, vector<Boundary> tBounds, BoundProtIndex fbpIdx, const vector<BoundProtPosition>& boundProtPositions, unsigned posIdx, unsigned layerNum)
+void NeuralNetwork::net2pwl(const vector<BoundaryPrototype>& inputValues, const vector<Boundary>& currentBounds, size_t layerNum)
 {
-    if ( posIdx < boundProtPositions.size() )
+    net2pwl(boundProts, rlPieces, inputValues, currentBounds, layerNum);
+}
+
+PwlPartialInfo NeuralNetwork::partialNet2pwl(unsigned startingPoint,
+                                             size_t fixedNodesNum,
+                                             const vector<BoundaryPrototype>& inputValues,
+                                             const vector<BoundProtPosition>& boundProtPositions)
+{
+    PwlBoundaryPrototypes localBoundProts;
+    PwlRegionalLinearPieces localRegionalLinearPieces;
+    vector<BoundaryPrototype> newBoundProts = inputValues;
+
+    writeBoundProts(localBoundProts, newBoundProts);
+
+    vector<Boundary> auxCurrentBounds;
+    vector<BoundarySymbol> iteration;
+
+    size_t fixedNodesIt = 0, fixedNodes = 0;
+    while ( fixedNodes < fixedNodesNum )
     {
-        if ( boundProtPositions.at(posIdx) == Cutting )
-        {
-            tBounds.push_back( Boundary(fbpIdx+posIdx, GeqZero) );
-
-            thread t1;
-            boundProtsMutex.lock();
-            if ( feasibleBoundsWithExtra(currentBounds, tBounds) )
-                t1 = thread(&NeuralNetwork::iterate_mthreading, this, newBoundProts, currentBounds, tBounds, fbpIdx, boundProtPositions, posIdx+1, layerNum);
-            boundProtsMutex.unlock();
-
-            tBounds.pop_back();
-            tBounds.push_back( Boundary(fbpIdx+posIdx, LeqZero) );
-
-            thread t2;
-            boundProtsMutex.lock();
-            if ( feasibleBoundsWithExtra(currentBounds, tBounds) )
-                t2 = thread(&NeuralNetwork::iterate_mthreading, this, newBoundProts, currentBounds, tBounds, fbpIdx, boundProtPositions, posIdx+1, layerNum);
-            boundProtsMutex.unlock();
-
-            if ( t1.joinable() )
-                t1.join();
-            if ( t2.joinable() )
-                t2.join();
-        }
+        if ( boundProtPositions.at(fixedNodesIt) != Cutting )
+            iteration.push_back(GeqZero);
         else
-            iterate_mthreading(newBoundProts, currentBounds, tBounds, fbpIdx, boundProtPositions, posIdx+1, layerNum);
+        {
+            if ( ( ( startingPoint >> fixedNodes ) & 1 ) == 0 )
+                iteration.push_back( GeqZero );
+            else
+                iteration.push_back( LeqZero );
+
+            if ( iteration.back() == GeqZero )
+                auxCurrentBounds.push_back( Boundary(iteration.size() - 1, GeqZero) );
+            else
+                auxCurrentBounds.push_back( Boundary(iteration.size() - 1, LeqZero) );
+
+            fixedNodes++;
+        }
+        fixedNodesIt++;
     }
-    else
+
+    size_t minIterationIdx = iteration.size();
+    size_t currentIterationIdx = minIterationIdx;
+
+    for ( size_t i = 0; i < boundProtPositions.size() - fixedNodesIt; i++ )
+        iteration.push_back(GeqZero);
+
+    bool iterated = true;
+
+    while ( iterated )
     {
-        vector<BoundaryPrototype> outputValues = newBoundProts;
-            unsigned fBoundsPos = 0;
-
-            for ( auto j = 0; j < boundProtPositions.size(); j++ )
+        while ( ( iterated ) && ( currentIterationIdx < iteration.size() ) )
+        {
+            if ( boundProtPositions.at(currentIterationIdx) != Cutting )
+                currentIterationIdx++;
+            else
             {
-                if ( boundProtPositions.at(j) == Cutting )
-                {
-                    if ( tBounds.at(fBoundsPos).second == LeqZero )
-                        for ( auto k = 0; k < outputValues.at(0).size(); k++ )
-                            outputValues.at(j).at(k) = 0;
+                if ( iteration.at(currentIterationIdx) == GeqZero )
+                    auxCurrentBounds.push_back( Boundary(currentIterationIdx, GeqZero) );
+                else
+                    auxCurrentBounds.push_back( Boundary(currentIterationIdx, LeqZero) );
 
-                    fBoundsPos++;
-                }
-                else if ( boundProtPositions.at(j) == Under )
-                {
-                    for ( auto k = 0; k < outputValues.at(0).size(); k++ )
-                        outputValues.at(j).at(k) = 0;
-                }
+                if ( feasibleBounds(boundProts, auxCurrentBounds) )
+                    currentIterationIdx++;
+                else
+                    iterated = iterate(minIterationIdx, iteration, currentIterationIdx, boundProtPositions, auxCurrentBounds);
             }
+        }
 
-            vector<Boundary> auxCurrentBounds(currentBounds);
-            auxCurrentBounds.insert(auxCurrentBounds.end(), tBounds.begin(), tBounds.end());
+        if ( iterated )
+        {
+            vector<BoundaryPrototype> outputValues = composeOutputValues(newBoundProts, iteration, boundProtPositions);
 
-            net2pwl_mthreading(outputValues, auxCurrentBounds, layerNum+1);
+            net2pwl(localBoundProts, localRegionalLinearPieces, outputValues, auxCurrentBounds, 1);
+
+            currentIterationIdx--;
+            iterated = iterate(minIterationIdx, iteration, currentIterationIdx, boundProtPositions, auxCurrentBounds);
+        }
+    }
+
+    return PwlPartialInfo(localRegionalLinearPieces, localBoundProts);
+}
+
+void NeuralNetwork::pwlInfoMerge(const vector<PwlPartialInfo>& threadsInfo)
+{
+    unsigned boundProtsInitialSize = boundProts.size();
+    for ( size_t i = 0; i < threadsInfo.size(); i++ )
+    {
+        unsigned boundProtsCurrentSize = boundProts.size();
+        boundProts.insert(boundProts.end(), threadsInfo.at(i).second.begin() + boundProtsInitialSize, threadsInfo.at(i).second.end());
+
+        for ( size_t j = 0; j < threadsInfo.at(i).first.size(); j++ )
+        {
+            rlPieces.push_back(threadsInfo.at(i).first.at(j));
+
+            if ( i > 0 )
+            {
+                for ( size_t k = 0; k < rlPieces.back().bounds.size(); k++ )
+                    if ( rlPieces.back().bounds.at(k).first >= boundProtsInitialSize )
+                    {
+                        rlPieces.back().bounds.at(k).first += boundProtsCurrentSize;
+                        rlPieces.back().bounds.at(k).first -= boundProtsInitialSize;
+                    }
+            }
+        }
     }
 }
 
-void NeuralNetwork::net2pwl_mthreading(const vector<BoundaryPrototype>& inputValues, const vector<Boundary>& currentBounds, unsigned layerNum)
+void NeuralNetwork::net2pwlMultithreading(const vector<BoundaryPrototype>& inputValues)
 {
-    vector<BoundaryPrototype> newBoundProts;
+    vector<BoundaryPrototype> newBoundProts = inputValues;
+    vector<BoundProtPosition> boundProtPositions;
 
-    if ( layerNum == 0 )
-        newBoundProts = inputValues;
+    writeBoundProts(boundProts, newBoundProts);
+
+    for ( size_t i = 0; i < newBoundProts.size(); i++ )
+        boundProtPositions.push_back( boundProtPosition(boundProts, i) );
+
+    unsigned cuttingNodes = 0;
+    for ( size_t i = 0; i < boundProtPositions.size(); i++ )
+        if ( boundProtPositions.at(i) == Cutting )
+            cuttingNodes++;
+
+    size_t fixedNodesMax = floor(log2(thread::hardware_concurrency()));
+    size_t fixedNodes = ( cuttingNodes > fixedNodesMax ? fixedNodesMax : cuttingNodes );
+    unsigned threadsNum = pow(2, fixedNodes);
+
+    if ( threadsNum > 1 )
+        cout << "(" << threadsNum << " simultaneous threads)" << endl;
     else
-        newBoundProts = composeBoundProts(inputValues, layerNum);
+        cout << "(Only one thread was necessary or possible)" << endl;
 
-    boundProtsMutex.lock();
-    BoundProtIndex newBoundProtFirstIdx = boundProts.size();
-    writeBoundProts(newBoundProts);
-    if ( layerNum + 1 == net.size() )
-    {
-        boundProts.push_back(boundProts.at(newBoundProtFirstIdx));
-        boundProts.at(newBoundProtFirstIdx+1).at(0) = boundProts.at(newBoundProtFirstIdx+1).at(0) - 1;
-    }
-    boundProtsMutex.unlock();
+    vector<future<PwlPartialInfo>> threadsInfoFut;
+    for ( unsigned i = 0; i < threadsNum; i++ )
+        threadsInfoFut.push_back( async(&NeuralNetwork::partialNet2pwl, this, i, fixedNodes, inputValues, boundProtPositions) );
 
-    if ( layerNum + 1 == net.size() )
-    {
-        boundProtsMutex.lock();
+    vector<PwlPartialInfo> threadsInfo;
+    for ( size_t i = 0; i < threadsInfoFut.size(); i++ )
+        threadsInfo.push_back(threadsInfoFut.at(i).get());
 
-        rlPiecesMutex.lock();
-        writeRegionalLinearPieces(newBoundProts, currentBounds, newBoundProtFirstIdx);
-        rlPiecesMutex.unlock();
-
-        boundProtsMutex.unlock();
-    }
-    else
-    {
-        vector<BoundProtPosition> boundProtPositions;
-
-        boundProtsMutex.lock();
-        for ( auto i = newBoundProtFirstIdx; i < newBoundProtFirstIdx + newBoundProts.size(); i++ )
-            boundProtPositions.push_back( boundProtPosition(i) );
-        boundProtsMutex.unlock();
-
-        vector<Boundary> dummyBounds;
-
-        iterate_mthreading(newBoundProts, currentBounds, dummyBounds, newBoundProtFirstIdx, boundProtPositions, 0, layerNum);
-    }
+    pwlInfoMerge(threadsInfo);
 }
 
 void NeuralNetwork::net2pwl()
 {
     vector<BoundaryPrototype> firstInputValues;
 
-    for ( auto i = 0; i < net.at(0).size(); i++ )
+    for ( size_t i = 0; i < net.at(0).size(); i++ )
     {
         BoundaryPrototype auxFirstInputValues;
 
-        for ( auto j = 0; j < net.at(0).at(0).size(); j++ )
+        for ( size_t j = 0; j < net.at(0).at(0).size(); j++ )
             auxFirstInputValues.push_back(net.at(0).at(i).at(j));
 
         firstInputValues.push_back(auxFirstInputValues);
     }
 
-    vector<Boundary> emptyBounds;
-
-    if ( multithreading )
-        net2pwl_mthreading(firstInputValues, emptyBounds, 0);
-    else
+    if ( processingMode == Multi )
+    {
+        cout << "Entering multithreading mode..." << endl;
+        net2pwlMultithreading(firstInputValues);
+    }
+    else if ( processingMode == Single )
+    {
+        cout << "Working with a single thread..." << endl;
+        vector<Boundary> emptyBounds;
         net2pwl(firstInputValues, emptyBounds, 0);
+    }
 
     pwlTranslation = true;
 }
 
-vector<RegionalLinearPiece> NeuralNetwork::getRegLinPieces()
+PwlRegionalLinearPieces NeuralNetwork::getRegLinPieces()
 {
     if ( !pwlTranslation )
         net2pwl();
@@ -453,7 +518,7 @@ vector<RegionalLinearPiece> NeuralNetwork::getRegLinPieces()
     return rlPieces;
 }
 
-vector<BoundaryPrototype> NeuralNetwork::getBoundPrototypes()
+PwlBoundaryPrototypes NeuralNetwork::getBoundPrototypes()
 {
     if ( !pwlTranslation )
         net2pwl();
@@ -462,7 +527,7 @@ vector<BoundaryPrototype> NeuralNetwork::getBoundPrototypes()
 }
 
 void NeuralNetwork::printPwlFile()
-{ //cout << "CHEGOU AQUIII ";
+{
     ofstream pwlFile(pwlFileName);
 
     if ( !pwlTranslation )
@@ -470,11 +535,11 @@ void NeuralNetwork::printPwlFile()
 
     pwlFile << "pwl" << endl << endl;
 
-    for ( auto i = 0; i < boundProts.size(); i++ )
+    for ( size_t i = 0; i < boundProts.size(); i++ )
     {
         pwlFile << "b ";
 
-        for ( auto j = 0; j < boundProts.at(0).size(); j++ )
+        for ( size_t j = 0; j < boundProts.at(0).size(); j++ )
         {
             pwlFile << boundProts.at(i).at(j);
 
@@ -485,11 +550,11 @@ void NeuralNetwork::printPwlFile()
         pwlFile << endl;
     }
 
-    for ( auto i = 0; i < rlPieces.size(); i++ )
+    for ( size_t i = 0; i < rlPieces.size(); i++ )
     {
         pwlFile << endl << "p ";
 
-        for ( auto j = 0; j < rlPieces.at(i).coefs.size(); j++ )
+        for ( size_t j = 0; j < rlPieces.at(i).coefs.size(); j++ )
         {
             pwlFile << rlPieces.at(i).coefs.at(j).first << " " << rlPieces.at(i).coefs.at(j).second;
 
@@ -499,7 +564,7 @@ void NeuralNetwork::printPwlFile()
                 pwlFile << endl;
         }
 
-        for ( auto j = 0; j < rlPieces.at(i).bounds.size(); j++ )
+        for ( size_t j = 0; j < rlPieces.at(i).bounds.size(); j++ )
         {
             if ( rlPieces.at(i).bounds.at(j).second == GeqZero )
                 pwlFile << "g ";
@@ -514,5 +579,5 @@ void NeuralNetwork::printPwlFile()
 
         if ( i+1 != rlPieces.size() )
             pwlFile << endl;
-    } //cout << " E AQUI!!" << endl;
+    }
 }
