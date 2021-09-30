@@ -1,32 +1,28 @@
 #ifndef ONNXPARSER_H
 #define ONNXPARSER_H
 
-#include <vector>
-
+#include "reluka.h"
 #include "onnx-ml.pb.h"
 
-using namespace std;
-
-typedef float NodeCoeff;
-typedef vector<NodeCoeff> Node;
-typedef vector<Node> Layer;
-
+namespace reluka
+{
 class OnnxParser
 {
     public:
         OnnxParser(const char* inputOnnxFileName);
-        vector<Layer> getNet();
-        string getOnnxFileName() { return onnxFileName; }
+        NeuralNetworkData getNet();
+        std::string getOnnxFileName() { return onnxFileName; }
 
     private:
         onnx::ModelProto onnxNet;
-        vector<Layer> net;
+        NeuralNetworkData net;
         bool netTranslation = false;
 
-        string onnxFileName;
+        std::string onnxFileName;
 
         unsigned layerMulAddRelu(unsigned node);
         void onnx2net();
 };
+}
 
 #endif // ONNXPARSER_H

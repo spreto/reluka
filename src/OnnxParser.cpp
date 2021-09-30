@@ -2,11 +2,11 @@
 
 #include "OnnxParser.h"
 
-using namespace std;
-
+namespace reluka
+{
 OnnxParser::OnnxParser(const char* inputOnnxFileName) : onnxFileName(inputOnnxFileName)
 {
-    ifstream onnxFile(inputOnnxFileName, ios_base::binary);
+    std::ifstream onnxFile(inputOnnxFileName, std::ios_base::binary);
     onnxNet.ParseFromIstream(&onnxFile);
     onnxFile.close();
 }
@@ -18,43 +18,45 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
            ( onnxNet.graph().node(beginingNode+2).op_type().compare("Clip") != 0 ) ) ||
          ( onnxNet.graph().node(beginingNode).output(0).compare( onnxNet.graph().node(beginingNode+1).input(1) ) != 0 ) ||
          ( onnxNet.graph().node(beginingNode+1).output(0).compare( onnxNet.graph().node(beginingNode+2).input(0) ) != 0 ) )
-        cout << "EXXCESS" << endl;
+        std::cout << "EXXCESS" << std::endl;
 
-    unsigned biasIdx = 0;
+    int biasIdx = 0;
     while ( onnxNet.graph().initializer(biasIdx).name().compare( onnxNet.graph().node(beginingNode+1).input(0) ) != 0 )
     {
         biasIdx++;
 
         if ( biasIdx == onnxNet.graph().initializer_size() )
-            cout << "EXCESSAOOO" << endl;
+            std::cout << "EXCESSAOOO" << std::endl;
     }
 
-    unsigned weightsIdx = 0;
+    int weightsIdx = 0;
     while ( onnxNet.graph().initializer(weightsIdx).name().compare( onnxNet.graph().node(beginingNode).input(1) ) != 0 )
     {
         weightsIdx++;
 
         if ( weightsIdx == onnxNet.graph().initializer_size() )
-            cout << "EXCESSAOOO" << endl;
+            std::cout << "EXCESSAOOO" << std::endl;
     }
 
     if ( ( onnxNet.graph().initializer(biasIdx).dims_size() != 1 ) ||
          ( onnxNet.graph().initializer(biasIdx).dims(0) != onnxNet.graph().initializer(weightsIdx).dims(1) ) )
-        cout << "MAIS EXCESSAO" << endl;
+        std::cout << "MAIS EXCESSAO" << std::endl;
 
     Layer lay;
 
     for ( auto i = 0; i < onnxNet.graph().initializer(weightsIdx).dims(1); i++ )
     {
         Node noh;
-        NodeCoeff aux;
+        NodeCoefficient aux;
 
         memcpy(&aux, &onnxNet.graph().initializer(biasIdx).raw_data()[4*i], sizeof(aux));
         noh.push_back(aux);
 
         for ( auto j = 0; j < onnxNet.graph().initializer(weightsIdx).dims(0); j++ )
         {
-            memcpy(&aux, &onnxNet.graph().initializer(weightsIdx).raw_data()[4*((onnxNet.graph().initializer(weightsIdx).dims(1)*j)+i)], sizeof(aux));
+            memcpy(&aux,
+                   &onnxNet.graph().initializer(weightsIdx).raw_data()[4*((onnxNet.graph().initializer(weightsIdx).dims(1)*j)+i)],
+                   sizeof(aux));
             noh.push_back(aux);
         }
 
@@ -71,19 +73,19 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
 
 void OnnxParser::onnx2net()
 {
-    unsigned currentNode = 0;
+    int currentNode = 0;
 
     while ( currentNode < onnxNet.graph().node_size() )
     {
         if ( onnxNet.graph().node(currentNode).op_type().compare("MatMul") == 0 )
         {
             if ( layerMulAddRelu(currentNode) && currentNode + 3 < onnxNet.graph().node_size() )
-                cout << "EXCESSAOOO!!!!" << endl;
+                std::cout << "EXCESSAOOO!!!!" << std::endl;
             currentNode = currentNode + 3;
         }
         else
         {
-            cout << "Exception" << endl;
+            std::cout << "Exception" << std::endl;
             currentNode++;
         }
     }
@@ -91,10 +93,11 @@ void OnnxParser::onnx2net()
     netTranslation = true;
 }
 
-vector<Layer> OnnxParser::getNet()
+NeuralNetworkData OnnxParser::getNet()
 {
     if ( !netTranslation )
         onnx2net();
 
     return net;
+}
 }
