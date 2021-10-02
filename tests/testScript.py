@@ -388,9 +388,9 @@ TEST_MODE = TestMode.LIMODSAT
 
 SINGLE_CONFIG_TEST_NUM = 5
 SINGLE_NN_TEST_NUM = 10
-MAX_INPUTS = 2
-MAX_NODES = 2
-MAX_LAYERS = 2
+MAX_INPUTS = 5
+MAX_NODES = 10
+MAX_LAYERS = 6
 #############################
 
 summary = []
@@ -403,7 +403,10 @@ if TEST_MODE is TestMode.PWL:
         for nodesNum in range(MAX_NODES):
             for layersNum in range(MAX_LAYERS):
                 for config in range(SINGLE_CONFIG_TEST_NUM):
-                    runRandomPwlTest("test_"+str(inputsNum+1)+"_"+str(nodesNum+1)+"_"+str(layersNum+1)+"_n"+str(config+1), inputsNum+1, nodesNum+1, layersNum+1)
+                    runRandomPwlTest("test_"+str(inputsNum+1)+"_"+str(nodesNum+1)+"_"+str(layersNum+1)+"_n"+str(config+1),
+                                     inputsNum+1,
+                                     nodesNum+1,
+                                     layersNum+1)
 
     createSummary()
 
@@ -415,7 +418,10 @@ elif TEST_MODE is TestMode.LIMODSAT:
         for nodesNum in range(MAX_NODES):
             for layersNum in range(MAX_LAYERS):
                 for config in range(SINGLE_CONFIG_TEST_NUM):
-                    runRandomLimodsatTest("test_"+str(inputsNum+1)+"_"+str(nodesNum+1)+"_"+str(layersNum+1)+"_n"+str(config+1), inputsNum+1, nodesNum+1, layersNum+1)
+                    runRandomLimodsatTest("test_"+str(inputsNum+1)+"_"+str(nodesNum+1)+"_"+str(layersNum+1)+"_n"+str(config+1),
+                                          inputsNum+1,
+                                          nodesNum+1,
+                                          layersNum+1)
 
     createSummary()
 
