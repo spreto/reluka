@@ -2,7 +2,7 @@
 #define ONNXPARSER_H
 
 #include "reluka.h"
-#include "onnx-ml.pb.h"
+#include "onnx-ml.proto3.pb.h"
 
 namespace reluka
 {
