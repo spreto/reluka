@@ -2,6 +2,7 @@
 #include "Property.h"
 #include "OnnxParser.h"
 #include "NeuralNetwork.h"
+#include "VariableManager.h"
 #include "PiecewiseLinearFunction.h"
 
 using namespace std;
@@ -21,7 +22,8 @@ int main(int argc, char **argv)
         cout << "DOES NOT HAVE the lattice property" << endl;
 
 */
-    reluka::Property prop(argv[1]);
+    pwl2limodsat::VariableManager vm(4);
+    reluka::Property prop(argv[1], &vm);
     prop.buildProperty();
     return 0;
 }

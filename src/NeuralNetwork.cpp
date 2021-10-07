@@ -41,7 +41,8 @@ pwl2limodsat::LPCoefNonNegative NeuralNetwork::gcd(pwl2limodsat::LPCoefNonNegati
         return gcd(b, a % b);
 }
 
-pwl2limodsat::LinearPieceCoefficient NeuralNetwork::dec2frac(NodeCoefficient decValue)
+template<class T>
+pwl2limodsat::LinearPieceCoefficient NeuralNetwork::dec2frac(T decValue)
 {
     pwl2limodsat::LPCoefNonNegative whole;
     bool negFactor = false;

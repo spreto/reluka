@@ -21,6 +21,10 @@ class NeuralNetwork
         void printPwlFile();
         std::string getPwlFileName() { return pwlFileName; }
 
+        static pwl2limodsat::LPCoefNonNegative gcd(pwl2limodsat::LPCoefNonNegative a,
+                                                   pwl2limodsat::LPCoefNonNegative b);
+        template<class T> static pwl2limodsat::LinearPieceCoefficient dec2frac(T decValue);
+
     private:
         std::string pwlFileName;
         enum ProcessingMode { Single, Multi };
@@ -34,10 +38,6 @@ class NeuralNetwork
         bool pwlTranslation = false;
 
         void setProcessingMode(ProcessingMode mode) { processingMode = mode; }
-
-        pwl2limodsat::LPCoefNonNegative gcd(pwl2limodsat::LPCoefNonNegative a,
-                                            pwl2limodsat::LPCoefNonNegative b);
-        pwl2limodsat::LinearPieceCoefficient dec2frac(NodeCoefficient decValue);
 
         BoundProtPosition boundProtPosition(const pwl2limodsat::BoundaryPrototypeCollection& boundProtData,
                                             pwl2limodsat::BoundProtIndex bIdx);
