@@ -8,8 +8,10 @@
 
 namespace reluka
 {
-NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNet, std::string onnxFileName, bool multithreading) :
-    net(inputNet)
+NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                             std::string onnxFileName,
+                             bool multithreading) :
+    neuralNetwork(inputNeuralNetwork)
 {
     if ( onnxFileName.substr(onnxFileName.size()-5,5) == ".onnx" )
         pwlFileName = onnxFileName.substr(0,onnxFileName.size()-5);
@@ -21,8 +23,9 @@ NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNet, std::string onnx
     pwlFileName.append(".pwl");
 }
 
-NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNet, std::string onnxFileName) :
-    NeuralNetwork(inputNet, onnxFileName, true) {}
+NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                             std::string onnxFileName) :
+    NeuralNetwork(inputNeuralNetwork, onnxFileName, true) {}
 
 pwl2limodsat::LPCoefNonNegative NeuralNetwork::gcd(pwl2limodsat::LPCoefNonNegative a,
                                                    pwl2limodsat::LPCoefNonNegative b)
@@ -95,13 +98,13 @@ bool NeuralNetwork::feasibleBounds(const pwl2limodsat::BoundaryPrototypeCollecti
     soplex::SoPlex sop;
 
     soplex::DSVector dummycol(0);
-    for ( size_t i = 1; i <= net.at(0).at(0).size()-1; i++ )
+    for ( size_t i = 1; i <= neuralNetwork.at(0).at(0).size()-1; i++ )
         sop.addColReal(soplex::LPCol(0, dummycol, 1, 0));
 
-    soplex::DSVector row(net.at(0).size());
+    soplex::DSVector row(neuralNetwork.at(0).size());
     for ( size_t i = 0; i < boundData.size(); i++ )
     {
-        for ( size_t j = 1; j <= net.at(0).at(0).size()-1; j++ )
+        for ( size_t j = 1; j <= neuralNetwork.at(0).at(0).size()-1; j++ )
             row.add(j-1, boundProtData.at(boundData.at(i).first).at(j));
 
         if ( boundData.at(i).second == pwl2limodsat::GeqZero )
@@ -128,7 +131,7 @@ pwl2limodsat::BoundaryPrototypeCollection NeuralNetwork::composeBoundProtData(co
 {
     pwl2limodsat::BoundaryPrototypeCollection newBoundProtData;
 
-    for ( size_t i = 0; i < net.at(layerNum).size(); i++ )
+    for ( size_t i = 0; i < neuralNetwork.at(layerNum).size(); i++ )
     {
         pwl2limodsat::BoundaryPrototype auxBoundProt;
 
@@ -137,12 +140,12 @@ pwl2limodsat::BoundaryPrototypeCollection NeuralNetwork::composeBoundProtData(co
             pwl2limodsat::BoundaryCoefficient auxCoeff;
 
             if ( j == 0 )
-                auxCoeff = net.at(layerNum).at(i).at(0);
+                auxCoeff = neuralNetwork.at(layerNum).at(i).at(0);
             else
                 auxCoeff = 0;
 
             for ( size_t k = 0; k < inputValues.size(); k++ )
-                auxCoeff = auxCoeff + inputValues.at(k).at(j) * net.at(layerNum).at(i).at(k+1);
+                auxCoeff = auxCoeff + inputValues.at(k).at(j) * neuralNetwork.at(layerNum).at(i).at(k+1);
 
             auxBoundProt.push_back(auxCoeff);
         }
@@ -290,7 +293,7 @@ void NeuralNetwork::net2pwl(pwl2limodsat::BoundaryPrototypeCollection& boundProt
     pwl2limodsat::BoundProtIndex newBoundProtDataFirstIdx = boundProtData.size();
     writeBoundProtData(boundProtData, newBoundProtData);
 
-    if ( layerNum + 1 == net.size() )
+    if ( layerNum + 1 == neuralNetwork.size() )
     {
         boundProtData.push_back(boundProtData.at(newBoundProtDataFirstIdx));
         boundProtData.at(newBoundProtDataFirstIdx + 1).at(0) = boundProtData.at(newBoundProtDataFirstIdx + 1).at(0) - 1;
@@ -496,12 +499,12 @@ void NeuralNetwork::net2pwl()
 {
     pwl2limodsat::BoundaryPrototypeCollection firstInputValues;
 
-    for ( size_t i = 0; i < net.at(0).size(); i++ )
+    for ( size_t i = 0; i < neuralNetwork.at(0).size(); i++ )
     {
         pwl2limodsat::BoundaryPrototype auxFirstInputValues;
 
-        for ( size_t j = 0; j < net.at(0).at(0).size(); j++ )
-            auxFirstInputValues.push_back(net.at(0).at(i).at(j));
+        for ( size_t j = 0; j < neuralNetwork.at(0).at(0).size(); j++ )
+            auxFirstInputValues.push_back(neuralNetwork.at(0).at(i).at(j));
 
         firstInputValues.push_back(auxFirstInputValues);
     }

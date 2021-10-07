@@ -11,8 +11,11 @@ namespace reluka
 class NeuralNetwork
 {
     public:
-        NeuralNetwork(const NeuralNetworkData& inputNet, std::string onnxFileName, bool multithreading);
-        NeuralNetwork(const NeuralNetworkData& inputNet, std::string onnxFileName);
+        NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                      std::string onnxFileName,
+                      bool multithreading);
+        NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                      std::string onnxFileName);
         pwl2limodsat::PiecewiseLinearFunctionData getPwlData();
         pwl2limodsat::BoundaryPrototypeCollection getBoundProtData();
         void printPwlFile();
@@ -23,7 +26,7 @@ class NeuralNetwork
         enum ProcessingMode { Single, Multi };
         ProcessingMode processingMode;
 
-        NeuralNetworkData net;
+        NeuralNetworkData neuralNetwork;
 
         pwl2limodsat::PiecewiseLinearFunctionData pwlData;
         pwl2limodsat::BoundaryPrototypeCollection boundProtData;

@@ -14,8 +14,8 @@ class OnnxParser
         std::string getOnnxFileName() { return onnxFileName; }
 
     private:
-        onnx::ModelProto onnxNet;
-        NeuralNetworkData net;
+        onnx::ModelProto onnxNeuralNetwork;
+        NeuralNetworkData neuralNetwork;
         bool netTranslation = false;
 
         std::string onnxFileName;
