@@ -17,25 +17,29 @@ class Property
         virtual ~Property();
         void buildProperty();
 
+        void print(); // provisório
+
     protected:
 
     private:
         std::string vnnlibFileName;
         std::ifstream vnnlibFile;
+        std::string currentVnnlibLine;
+        size_t currentLinePosition;
         pwl2limodsat::VariableManager *variableManager;
 
         unsigned inputDimension = 0, outputDimension = 0;
-        std::vector<lukaFormula::Formula> assertFormulas;
+        std::vector<lukaFormula::Formula> premiseFormulas;
+        lukaFormula::Formula conclusionFormula;
         bool propertyBuilding = false;
 
-        std::string currentVnnlibLine;
-        size_t currentLinePosition;
+        enum AssertType { Undefined, Input, Output };
+        enum AtomicAssertType { LessEq, GreaterEq };
 
         size_t nextNonSpace();
         void parseVnnlibDeclareConst();
-        enum AtomicAssertType { LessEq, GreaterEq };
-        lukaFormula::Modsat parseVnnlibInequality(AtomicAssertType type);
-        lukaFormula::Formula parseVnnlibAssert();
+        std::pair<AssertType,lukaFormula::Modsat> parseVnnlibAtomicAssert(AtomicAssertType atomicAssertType);
+        std::pair<AssertType,lukaFormula::Modsat> parseVnnlibAssert();
         void vnnlib2property();
 };
 }

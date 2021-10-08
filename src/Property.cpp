@@ -104,7 +104,7 @@ void Property::parseVnnlibDeclareConst()
     currentLinePosition = nextNonSpace();
 }
 
-lukaFormula::Modsat Property::parseVnnlibInequality(AtomicAssertType type)
+std::pair<Property::AssertType,lukaFormula::Modsat> Property::parseVnnlibAtomicAssert(AtomicAssertType atomicAssertType)
 {
     size_t beginPos[2], stringLength[2];
 
@@ -118,19 +118,37 @@ lukaFormula::Modsat Property::parseVnnlibInequality(AtomicAssertType type)
     currentLinePosition = beginPos[1] + stringLength[1];
     currentLinePosition = nextNonSpace();
 
+    AssertType assertType;
     lukaFormula::Formula form[2];
     lukaFormula::ModsatSet msSet;
 
     for ( unsigned i = 0; i < 2; i++ )
     {
-        if ( currentVnnlibLine.compare(beginPos[i], 2, "X_") == 0 )
+        if ( ( currentVnnlibLine.compare(beginPos[i], 2, "X_") == 0 ) ||
+             ( currentVnnlibLine.compare(beginPos[i], 2, "Y_") == 0 ) )
         {
             unsigned varNum = stoi(currentVnnlibLine.substr(beginPos[i]+2, stringLength[i]-2));
 
-            if ( varNum < inputDimension )
-                form[i] = lukaFormula::Formula(varNum);
+            if ( currentVnnlibLine.compare(beginPos[i], 2, "X_") == 0 )
+            {
+                if ( varNum < inputDimension )
+                {
+                    assertType = Input;
+                    form[i] = lukaFormula::Formula(varNum+1);
+                }
+                else
+                    std::invalid_argument("Not in standard vnnlib file format.");
+            }
             else
-                std::invalid_argument("Not in standard vnnlib file format.");
+            {
+                if ( varNum < outputDimension )
+                {
+                    assertType = Output;
+                    form[i] = lukaFormula::Formula(0); // provisório
+                }
+                else
+                    std::invalid_argument("Not in standard vnnlib file format.");
+            }
         }
         else
         {
@@ -144,18 +162,26 @@ lukaFormula::Modsat Property::parseVnnlibInequality(AtomicAssertType type)
                                                                                     constFraction.first,
                                                                                     constFraction.second);
             form[i] = msAux.phi;
-            msSet = msAux.Phi;
+            msSet.insert(msSet.end(), msAux.Phi.begin(), msAux.Phi.end());
         }
     }
 
-    form[0].addImplication(form[1]);
-
-    return { form[0], msSet };
+    if ( atomicAssertType == LessEq )
+    {
+        form[0].addImplication(form[1]);
+        return std::pair<AssertType,lukaFormula::Modsat>(assertType, { form[0], msSet });
+    }
+    else
+    {
+        form[1].addImplication(form[0]);
+        return std::pair<AssertType,lukaFormula::Modsat>(assertType, { form[1], msSet });
+    }
 }
 
-lukaFormula::Formula Property::parseVnnlibAssert()
-{ // isso vai ter q retornar modsat
-    lukaFormula::Formula assertForm;
+std::pair<Property::AssertType,lukaFormula::Modsat> Property::parseVnnlibAssert()
+{
+    std::pair<AssertType,lukaFormula::Modsat> assertPair;
+    assertPair.first = Undefined;
 
     if ( currentVnnlibLine.compare(currentLinePosition, 1, "(") != 0 )
         throw std::invalid_argument("Not in standard vnnlib file format.");
@@ -172,7 +198,19 @@ lukaFormula::Formula Property::parseVnnlibAssert()
             throw std::invalid_argument("Not in standard vnnlib file format.");
 
         while ( currentVnnlibLine.compare(currentLinePosition, 1, ")") != 0 )
-            assertForm.addMinimum( parseVnnlibAssert() );
+        {
+            std::pair<AssertType,lukaFormula::Modsat> returnPair = parseVnnlibAssert();
+
+            if ( assertPair.first == Undefined )
+                assertPair.first = returnPair.first;
+            else if ( assertPair.first != returnPair.first )
+                throw std::invalid_argument("Not in standard vnnlib file format.");
+
+            assertPair.second.phi.addMinimum( returnPair.second.phi );
+            assertPair.second.Phi.insert(assertPair.second.Phi.end(),
+                                         returnPair.second.Phi.begin(),
+                                         returnPair.second.Phi.end());
+        }
     }
     else if ( currentVnnlibLine.compare(currentLinePosition, 2, "or") == 0 )
     {
@@ -183,19 +221,31 @@ lukaFormula::Formula Property::parseVnnlibAssert()
             throw std::invalid_argument("Not in standard vnnlib file format.");
 
         while ( currentVnnlibLine.compare(currentLinePosition, 1, ")") != 0 )
-            assertForm.addMaximum( parseVnnlibAssert() );
+        {
+            std::pair<AssertType,lukaFormula::Modsat> returnPair = parseVnnlibAssert();
+
+            if ( assertPair.first == Undefined )
+                assertPair.first = returnPair.first;
+            else if ( assertPair.first != returnPair.first )
+                throw std::invalid_argument("Not in standard vnnlib file format.");
+
+            assertPair.second.phi.addMaximum( returnPair.second.phi );
+            assertPair.second.Phi.insert(assertPair.second.Phi.end(),
+                                         returnPair.second.Phi.begin(),
+                                         returnPair.second.Phi.end());
+        }
     }
     else if ( currentVnnlibLine.compare(currentLinePosition, 2, "<=") == 0 )
     {
         currentLinePosition += 2;
         currentLinePosition = nextNonSpace();
-        lukaFormula::Modsat bla = parseVnnlibInequality(LessEq);
+        assertPair = parseVnnlibAtomicAssert(LessEq);
     }
     else if ( currentVnnlibLine.compare(currentLinePosition, 2, ">=") == 0 )
     {
         currentLinePosition += 2;
         currentLinePosition = nextNonSpace();
-        lukaFormula::Modsat bla = parseVnnlibInequality(GreaterEq);
+        assertPair = parseVnnlibAtomicAssert(GreaterEq);
     }
     else
         throw std::invalid_argument("Not in standard vnnlib file format.");
@@ -206,7 +256,7 @@ lukaFormula::Formula Property::parseVnnlibAssert()
     currentLinePosition += 1;
     currentLinePosition = nextNonSpace();
 
-    return assertForm;
+    return assertPair;
 }
 
 void Property::vnnlib2property()
@@ -232,7 +282,17 @@ void Property::vnnlib2property()
         {
             currentLinePosition += 6;
             currentLinePosition = nextNonSpace();
-            assertFormulas.push_back(parseVnnlibAssert());
+
+            std::pair<AssertType,lukaFormula::Modsat> assertReturn = parseVnnlibAssert();
+
+            if ( assertReturn.first == Input )
+                premiseFormulas.push_back(assertReturn.second.phi);
+            else
+                conclusionFormula = assertReturn.second.phi;
+
+            premiseFormulas.insert(premiseFormulas.end(),
+                                   assertReturn.second.Phi.begin(),
+                                   assertReturn.second.Phi.end());
         }
         else
             throw std::invalid_argument("Not in standard vnnlib file format.");
@@ -249,5 +309,20 @@ void Property::buildProperty()
 {
     if ( !propertyBuilding )
         vnnlib2property();
+}
+
+void Property::print()
+{
+    std::ofstream file("test.out");
+
+    for ( lukaFormula::Formula prem : premiseFormulas )
+    {
+        file << "prem:" << std::endl;
+        prem.print(&file);
+        file << std::endl;
+    }
+
+    file << "conclus:" << std::endl;
+    conclusionFormula.print(&file);
 }
 }

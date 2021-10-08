@@ -25,5 +25,6 @@ int main(int argc, char **argv)
     pwl2limodsat::VariableManager vm(4);
     reluka::Property prop(argv[1], &vm);
     prop.buildProperty();
+    prop.print();
     return 0;
 }
