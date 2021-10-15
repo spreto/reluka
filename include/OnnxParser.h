@@ -10,7 +10,7 @@ class OnnxParser
 {
     public:
         OnnxParser(const char* inputOnnxFileName);
-        NeuralNetworkData getNet();
+        NeuralNetworkData getNeuralNetwork();
         std::string getOnnxFileName() { return onnxFileName; }
 
     private:

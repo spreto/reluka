@@ -18,7 +18,7 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
            ( onnxNeuralNetwork.graph().node(beginingNode+2).op_type().compare("Clip") != 0 ) ) ||
          ( onnxNeuralNetwork.graph().node(beginingNode).output(0).compare( onnxNeuralNetwork.graph().node(beginingNode+1).input(1) ) != 0 ) ||
          ( onnxNeuralNetwork.graph().node(beginingNode+1).output(0).compare( onnxNeuralNetwork.graph().node(beginingNode+2).input(0) ) != 0 ) )
-        std::cout << "EXXCESS" << std::endl;
+        throw std::invalid_argument("Not a recognizable onnx format.");
 
     int biasIdx = 0;
     while ( onnxNeuralNetwork.graph().initializer(biasIdx).name().compare( onnxNeuralNetwork.graph().node(beginingNode+1).input(0) ) != 0 )
@@ -26,7 +26,7 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
         biasIdx++;
 
         if ( biasIdx == onnxNeuralNetwork.graph().initializer_size() )
-            std::cout << "EXCESSAOOO" << std::endl;
+            throw std::invalid_argument("Not a recognizable onnx format.");
     }
 
     int weightsIdx = 0;
@@ -35,12 +35,12 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
         weightsIdx++;
 
         if ( weightsIdx == onnxNeuralNetwork.graph().initializer_size() )
-            std::cout << "EXCESSAOOO" << std::endl;
+            throw std::invalid_argument("Not a recognizable onnx format.");
     }
 
     if ( ( onnxNeuralNetwork.graph().initializer(biasIdx).dims_size() != 1 ) ||
          ( onnxNeuralNetwork.graph().initializer(biasIdx).dims(0) != onnxNeuralNetwork.graph().initializer(weightsIdx).dims(1) ) )
-        std::cout << "MAIS EXCESSAO" << std::endl;
+        throw std::invalid_argument("Not a recognizable onnx format.");
 
     Layer lay;
 
@@ -66,7 +66,7 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
     neuralNetwork.push_back(lay);
 
     // Return 1 if it should be the last node and 0 otherwise
-    if ( onnxNeuralNetwork.graph().node(beginingNode+2).op_type().compare("Relu") )
+    if ( onnxNeuralNetwork.graph().node(beginingNode+2).op_type().compare("Relu") != 0 )
         return 1;
     return 0;
 }
@@ -80,12 +80,12 @@ void OnnxParser::onnx2net()
         if ( onnxNeuralNetwork.graph().node(currentNode).op_type().compare("MatMul") == 0 )
         {
             if ( layerMulAddRelu(currentNode) && currentNode + 3 < onnxNeuralNetwork.graph().node_size() )
-                std::cout << "EXCESSAOOO!!!!" << std::endl;
+                throw std::invalid_argument("Not a recognizable onnx format.");
             currentNode = currentNode + 3;
         }
         else
         {
-            std::cout << "Exception" << std::endl;
+            throw std::invalid_argument("Not a recognizable onnx format.");
             currentNode++;
         }
     }
@@ -93,7 +93,7 @@ void OnnxParser::onnx2net()
     netTranslation = true;
 }
 
-NeuralNetworkData OnnxParser::getNet()
+NeuralNetworkData OnnxParser::getNeuralNetwork()
 {
     if ( !netTranslation )
         onnx2net();
