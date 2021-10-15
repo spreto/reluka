@@ -5,7 +5,8 @@ from enum import Enum
 class TestMode(Enum):
     ELSE = 0
     PWL = 1
-    LIMODSAT = 2
+    MultiPWL = 2
+    LIMODSAT = 3
 
 PRECISION = 5
 DECPRECISION_form = ".5f"
@@ -364,6 +365,15 @@ def runRandomLimodsatTest(fileName, inputDim, hiddenDim, hiddenNum):
 
     runLimodsatTest(fileName, torchModel, inputDim, latticePropertyMessage)
 
+def runRandomMultiPwlTest(fileName, inputDim, hiddenDim, hiddenNum, outputDim):
+    torchModel = RandPwlNeuralNet(inputDim, hiddenDim, hiddenNum, outputDim)
+    torch.save(torchModel, data_folder+fileName+".torch")
+
+    toOnnxInput = torch.as_tensor([0]*inputDim).float()
+    torch.onnx.export(torchModel, toOnnxInput, data_folder+fileName+".onnx")
+
+    os.system(reluka_path+" "+data_folder+fileName+".onnx")
+
 def createSummary():
     global summary
 
@@ -384,13 +394,14 @@ def createSummary():
     summary_file.close()
 
 #############################
-TEST_MODE = TestMode.LIMODSAT
+TEST_MODE = TestMode.MultiPWL
 
-SINGLE_CONFIG_TEST_NUM = 5
+SINGLE_CONFIG_TEST_NUM = 1
 SINGLE_NN_TEST_NUM = 10
-MAX_INPUTS = 5
-MAX_NODES = 10
-MAX_LAYERS = 6
+MAX_INPUTS = 4
+MAX_OUTPUTS = 5
+MAX_NODES = 7
+MAX_LAYERS = 2
 #############################
 
 summary = []
@@ -425,5 +436,21 @@ elif TEST_MODE is TestMode.LIMODSAT:
 
     createSummary()
 
+elif TEST_MODE is TestMode.MultiPWL:
+    data_folder = "./multiPwlTestData/"
+    setDataFolder()
+
+    for inputsNum in range(MAX_INPUTS):
+        for nodesNum in range(MAX_NODES):
+            for layersNum in range(MAX_LAYERS):
+                for outputsNum in range(MAX_OUTPUTS):
+                    runRandomMultiPwlTest("test_"+str(inputsNum+1)+"_"+str(nodesNum+1)+"_"+str(layersNum+1)+"_"+str(outputsNum+1),
+                                          inputsNum+1,
+                                          nodesNum+1,
+                                          layersNum+1,
+                                          outputsNum+1)
+
+    createSummary()
+
 elif TEST_MODE is TestMode.ELSE:
-    print("Not implemented.")
+    print("else")

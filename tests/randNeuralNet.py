@@ -5,7 +5,7 @@ from torch import nn
 
 class RandPwlNeuralNet(nn.Module):
 
-    def __init__(self, inputDim, hiddenDim, hiddenNum):
+    def __init__(self, inputDim, hiddenDim, hiddenNum, outputDim = 1):
         super(RandPwlNeuralNet, self).__init__()
 
         hl = []
@@ -23,9 +23,9 @@ class RandPwlNeuralNet(nn.Module):
 
         self.hiddenLayers = nn.Sequential(*hl)
 
-        self.outputLayer = nn.Linear(hiddenDim, 1)
-        self.outputLayer.weight.data = torch.rand(1, hiddenDim) + torch.randint(-INT_LIMIT, INT_LIMIT, (1, hiddenDim))
-        self.outputLayer.bias.data = torch.rand(1) + torch.randint(-INT_LIMIT, INT_LIMIT, (1,))
+        self.outputLayer = nn.Linear(hiddenDim, outputDim)
+        self.outputLayer.weight.data = torch.rand(outputDim, hiddenDim) + torch.randint(-INT_LIMIT, INT_LIMIT, (outputDim, hiddenDim))
+        self.outputLayer.bias.data = torch.rand(outputDim) + torch.randint(-INT_LIMIT, INT_LIMIT, (outputDim,))
 
     def forward(self, x):
         y = self.hiddenLayers(x)
