@@ -252,7 +252,8 @@ bool NeuralNetwork::iterate(size_t limitIterationIdx,
         if ( boundProtPositions.at(currentIterationIdx) == Cutting )
             boundData.pop_back();
 
-        if ( ( boundProtPositions.at(currentIterationIdx) == Cutting ) && ( iteration.at(currentIterationIdx) == pwl2limodsat::GeqZero ) )
+        if ( ( boundProtPositions.at(currentIterationIdx) == Cutting ) &&
+             ( iteration.at(currentIterationIdx) == pwl2limodsat::GeqZero ) )
         {
             iteration.at(currentIterationIdx) = pwl2limodsat::LeqZero;
             iterating = false;
@@ -298,7 +299,6 @@ void NeuralNetwork::net2pwl(pwl2limodsat::BoundaryPrototypeCollection& boundProt
     {
         boundProtData.push_back(boundProtData.at(newBoundProtDataFirstIdx));
         boundProtData.at(newBoundProtDataFirstIdx + 1).at(0) = boundProtData.at(newBoundProtDataFirstIdx + 1).at(0) - 1;
-
         writePwlData(pwlData, boundProtData, newBoundProtData, currentBoundData, newBoundProtDataFirstIdx);
     }
     else
@@ -322,9 +322,11 @@ void NeuralNetwork::net2pwl(pwl2limodsat::BoundaryPrototypeCollection& boundProt
                 else
                 {
                     if ( iteration.at(currentIterationIdx) == pwl2limodsat::GeqZero )
-                        auxCurrentBoundData.push_back( pwl2limodsat::Boundary(newBoundProtDataFirstIdx + currentIterationIdx, pwl2limodsat::GeqZero) );
+                        auxCurrentBoundData.push_back( pwl2limodsat::Boundary(newBoundProtDataFirstIdx + currentIterationIdx,
+                                                                              pwl2limodsat::GeqZero) );
                     else
-                        auxCurrentBoundData.push_back( pwl2limodsat::Boundary(newBoundProtDataFirstIdx + currentIterationIdx, pwl2limodsat::LeqZero) );
+                        auxCurrentBoundData.push_back( pwl2limodsat::Boundary(newBoundProtDataFirstIdx + currentIterationIdx,
+                                                                              pwl2limodsat::LeqZero) );
 
                     if ( feasibleBounds(boundProtData, auxCurrentBoundData) )
                         currentIterationIdx++;
@@ -335,7 +337,9 @@ void NeuralNetwork::net2pwl(pwl2limodsat::BoundaryPrototypeCollection& boundProt
 
             if ( iterated )
             {
-                pwl2limodsat::BoundaryPrototypeCollection outputValues = composeOutputValues(newBoundProtData, iteration, boundProtPositions);
+                pwl2limodsat::BoundaryPrototypeCollection outputValues = composeOutputValues(newBoundProtData,
+                                                                                             iteration,
+                                                                                             boundProtPositions);
 
                 net2pwl(boundProtData, pwlData, outputValues, auxCurrentBoundData, layerNum+1);
 
@@ -360,7 +364,7 @@ std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
                                                                                    const std::vector<BoundProtPosition>& boundProtPositions)
 {
     pwl2limodsat::BoundaryPrototypeCollection localBoundProtData;
-    pwl2limodsat::PiecewiseLinearFunctionData localPWLData;
+    pwl2limodsat::PiecewiseLinearFunctionData localPwlData;
     pwl2limodsat::BoundaryPrototypeCollection newBoundProtData = inputValues;
 
     writeBoundProtData(localBoundProtData, newBoundProtData);
@@ -420,9 +424,11 @@ std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
 
         if ( iterated )
         {
-            pwl2limodsat::BoundaryPrototypeCollection outputValues = composeOutputValues(newBoundProtData, iteration, boundProtPositions);
+            pwl2limodsat::BoundaryPrototypeCollection outputValues = composeOutputValues(newBoundProtData,
+                                                                                         iteration,
+                                                                                         boundProtPositions);
 
-            net2pwl(localBoundProtData, localPWLData, outputValues, auxCurrentBoundData, 1);
+            net2pwl(localBoundProtData, localPwlData, outputValues, auxCurrentBoundData, 1);
 
             currentIterationIdx--;
             iterated = iterate(minIterationIdx, iteration, currentIterationIdx, boundProtPositions, auxCurrentBoundData);
@@ -430,7 +436,7 @@ std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
     }
 
     return std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
-                     pwl2limodsat::BoundaryPrototypeCollection>(localPWLData, localBoundProtData);
+                     pwl2limodsat::BoundaryPrototypeCollection>(localPwlData, localBoundProtData);
 }
 
 void NeuralNetwork::pwlInfoMerge(const std::vector<std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
@@ -440,7 +446,9 @@ void NeuralNetwork::pwlInfoMerge(const std::vector<std::pair<pwl2limodsat::Piece
     for ( size_t i = 0; i < threadsInfo.size(); i++ )
     {
         unsigned boundProtDataCurrentSize = boundProtData.size();
-        boundProtData.insert(boundProtData.end(), threadsInfo.at(i).second.begin() + boundProtDataInitialSize, threadsInfo.at(i).second.end());
+        boundProtData.insert(boundProtData.end(),
+                             threadsInfo.at(i).second.begin() + boundProtDataInitialSize,
+                             threadsInfo.at(i).second.end());
 
         for ( size_t j = 0; j < threadsInfo.at(i).first.size(); j++ )
         {
@@ -477,12 +485,7 @@ void NeuralNetwork::net2pwlMultithreading(const pwl2limodsat::BoundaryPrototypeC
     size_t fixedNodesMax = floor(log2(std::thread::hardware_concurrency()));
     size_t fixedNodes = ( cuttingNodes > fixedNodesMax ? fixedNodesMax : cuttingNodes );
     unsigned threadsNum = pow(2, fixedNodes);
-/*
-    if ( threadsNum > 1 )
-        cout << "(" << threadsNum << " simultaneous threads)" << endl;
-    else
-        cout << "(Only one thread was necessary or possible)" << endl;
-*/
+
     std::vector<std::future<std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
                                       pwl2limodsat::BoundaryPrototypeCollection>>> threadsInfoFut;
     for ( unsigned i = 0; i < threadsNum; i++ )
@@ -512,12 +515,10 @@ void NeuralNetwork::net2pwl()
 
     if ( processingMode == Multi )
     {
-//        cout << "Entering multithreading mode..." << endl;
         net2pwlMultithreading(firstInputValues);
     }
     else if ( processingMode == Single )
     {
-//        cout << "Working with a single thread..." << endl;
         pwl2limodsat::BoundaryCollection emptyBounds;
         net2pwl(firstInputValues, emptyBounds, 0);
     }
