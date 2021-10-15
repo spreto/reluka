@@ -9,23 +9,64 @@
 namespace reluka
 {
 NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                             const std::vector<unsigned>& inputNnOutputIndexes,
                              std::string onnxFileName,
                              bool multithreading) :
-    neuralNetwork(inputNeuralNetwork)
+    neuralNetwork(inputNeuralNetwork),
+    nnOutputIndexes(inputNnOutputIndexes)
 {
+    std::string generalPwlFileName;
+
     if ( onnxFileName.substr(onnxFileName.size()-5,5) == ".onnx" )
-        pwlFileName = onnxFileName.substr(0,onnxFileName.size()-5);
+        generalPwlFileName = onnxFileName.substr(0,onnxFileName.size()-5);
     else
-        pwlFileName = onnxFileName;
+        generalPwlFileName = onnxFileName;
+
+    if ( nnOutputIndexes.empty() )
+        for ( size_t outIdx = 0; outIdx < neuralNetwork.back().size(); outIdx++ )
+            nnOutputIndexes.push_back(outIdx);
+
+    for ( size_t outIdx = 0; outIdx < nnOutputIndexes.size(); outIdx++ )
+    {
+        pwl2limodsat::PiecewiseLinearFunctionData emptyPwlData;
+        pwlData.push_back(emptyPwlData);
+
+        pwlFileName.push_back(generalPwlFileName + "_" + std::to_string(nnOutputIndexes.at(outIdx)) + ".pwl");
+    }
 
     processingMode = ( multithreading ? Multi : Single );
-
-    pwlFileName.append(".pwl");
 }
+
+NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                             std::string onnxFileName,
+                             bool multithreading) :
+    NeuralNetwork(inputNeuralNetwork,
+                  std::vector<unsigned>(),
+                  onnxFileName,
+                  multithreading) {}
+
+NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                             const std::vector<unsigned>& inputNnOutputIndexes,
+                             std::string onnxFileName) :
+    NeuralNetwork(inputNeuralNetwork, inputNnOutputIndexes, onnxFileName, true) {}
 
 NeuralNetwork::NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
                              std::string onnxFileName) :
     NeuralNetwork(inputNeuralNetwork, onnxFileName, true) {}
+
+size_t NeuralNetwork::getNnOutputIndexesIdx(unsigned nnOutputIndex)
+{
+    size_t outIdx = -1;
+
+    for ( size_t i = 0; i < nnOutputIndexes.size(); i++ )
+        if ( nnOutputIndexes.at(i) == (size_t) nnOutputIndex )
+            outIdx = i;
+
+    if ( outIdx == -1 )
+        throw std::invalid_argument("Such output pwl representation was not built.");
+
+    return outIdx;
+}
 
 pwl2limodsat::LPCoefNonNegative NeuralNetwork::gcd(pwl2limodsat::LPCoefNonNegative a,
                                                    pwl2limodsat::LPCoefNonNegative b)
@@ -201,39 +242,39 @@ pwl2limodsat::BoundaryPrototypeCollection NeuralNetwork::composeOutputValues(con
 
 void NeuralNetwork::writePwlData(pwl2limodsat::PiecewiseLinearFunctionData& pwlData,
                                  const pwl2limodsat::BoundaryPrototypeCollection& boundProtData,
-                                 const pwl2limodsat::BoundaryPrototypeCollection& inputValues,
+                                 const pwl2limodsat::BoundaryPrototype& inputValues,
                                  const pwl2limodsat::BoundaryCollection& currentBoundData,
-                                 pwl2limodsat::BoundProtIndex newBoundProtFirstIdx)
+                                 std::pair<pwl2limodsat::BoundProtIndex,pwl2limodsat::BoundProtIndex> newBoundProtIdx)
 {
     pwl2limodsat::RegionalLinearPieceData rlp0;
     rlp0.bound = currentBoundData;
-    rlp0.bound.push_back(pwl2limodsat::Boundary(newBoundProtFirstIdx, pwl2limodsat::LeqZero));
+    rlp0.bound.push_back(pwl2limodsat::Boundary(newBoundProtIdx.first, pwl2limodsat::LeqZero));
     if ( feasibleBounds(boundProtData, rlp0.bound) )
     {
-        for ( size_t i = 0; i < inputValues.at(0).size(); i++ )
+        for ( size_t i = 0; i < inputValues.size(); i++ )
             rlp0.lpData.push_back(pwl2limodsat::LinearPieceCoefficient(0,1));
         pwlData.push_back(rlp0);
     }
 
     pwl2limodsat::RegionalLinearPieceData rlp0_1;
     rlp0_1.bound = currentBoundData;
-    rlp0_1.bound.push_back(pwl2limodsat::Boundary(newBoundProtFirstIdx, pwl2limodsat::GeqZero));
-    rlp0_1.bound.push_back(pwl2limodsat::Boundary(newBoundProtFirstIdx+1, pwl2limodsat::LeqZero));
+    rlp0_1.bound.push_back(pwl2limodsat::Boundary(newBoundProtIdx.first, pwl2limodsat::GeqZero));
+    rlp0_1.bound.push_back(pwl2limodsat::Boundary(newBoundProtIdx.second, pwl2limodsat::LeqZero));
     if ( feasibleBounds(boundProtData, rlp0_1.bound) )
     {
-        for ( size_t i = 0; i < inputValues.at(0).size(); i++ )
-            rlp0_1.lpData.push_back(dec2frac(inputValues.at(0).at(i)));
+        for ( size_t i = 0; i < inputValues.size(); i++ )
+            rlp0_1.lpData.push_back(dec2frac(inputValues.at(i)));
         pwlData.push_back(rlp0_1);
     }
 
     pwl2limodsat::RegionalLinearPieceData rlp1;
     rlp1.bound = currentBoundData;
-    rlp1.bound.push_back(pwl2limodsat::Boundary(newBoundProtFirstIdx+1, pwl2limodsat::GeqZero));
+    rlp1.bound.push_back(pwl2limodsat::Boundary(newBoundProtIdx.second, pwl2limodsat::GeqZero));
 
     if ( feasibleBounds(boundProtData, rlp1.bound) )
     {
         rlp1.lpData.push_back(pwl2limodsat::LinearPieceCoefficient(1,1));
-        for ( size_t i = 1; i < inputValues.at(0).size(); i++ )
+        for ( size_t i = 1; i < inputValues.size(); i++ )
             rlp1.lpData.push_back(pwl2limodsat::LinearPieceCoefficient(0,1));
         pwlData.push_back(rlp1);
     }
@@ -280,7 +321,7 @@ bool NeuralNetwork::iterate(std::vector<pwl2limodsat::BoundarySymbol>& iteration
 }
 
 void NeuralNetwork::net2pwl(pwl2limodsat::BoundaryPrototypeCollection& boundProtData,
-                            pwl2limodsat::PiecewiseLinearFunctionData& pwlData,
+                            std::vector<pwl2limodsat::PiecewiseLinearFunctionData>& pwlData,
                             const pwl2limodsat::BoundaryPrototypeCollection& inputValues,
                             const pwl2limodsat::BoundaryCollection& currentBoundData,
                             size_t layerNum)
@@ -297,9 +338,17 @@ void NeuralNetwork::net2pwl(pwl2limodsat::BoundaryPrototypeCollection& boundProt
 
     if ( layerNum + 1 == neuralNetwork.size() )
     {
-        boundProtData.push_back(boundProtData.at(newBoundProtDataFirstIdx));
-        boundProtData.at(newBoundProtDataFirstIdx + 1).at(0) = boundProtData.at(newBoundProtDataFirstIdx + 1).at(0) - 1;
-        writePwlData(pwlData, boundProtData, newBoundProtData, currentBoundData, newBoundProtDataFirstIdx);
+        for ( size_t outIdx = 0; outIdx < nnOutputIndexes.size(); outIdx++ )
+        {
+            boundProtData.push_back( boundProtData.at(newBoundProtDataFirstIdx+nnOutputIndexes.at(outIdx)) );
+            boundProtData.back().at(0) = boundProtData.back().at(0) - 1;
+            writePwlData( pwlData.at(outIdx),
+                          boundProtData,
+                          newBoundProtData.at( nnOutputIndexes.at(outIdx) ),
+                          currentBoundData,
+                          std::pair<pwl2limodsat::BoundProtIndex, pwl2limodsat::BoundProtIndex>(newBoundProtDataFirstIdx + nnOutputIndexes.at(outIdx),
+                                                                                                boundProtData.size() - 1) );
+        }
     }
     else
     {
@@ -357,15 +406,21 @@ void NeuralNetwork::net2pwl(const pwl2limodsat::BoundaryPrototypeCollection& inp
     net2pwl(boundProtData, pwlData, inputValues, currentBoundData, layerNum);
 }
 
-std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
+std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
           pwl2limodsat::BoundaryPrototypeCollection> NeuralNetwork::partialNet2pwl(unsigned startingPoint,
                                                                                    size_t fixedNodesNum,
                                                                                    const pwl2limodsat::BoundaryPrototypeCollection& inputValues,
                                                                                    const std::vector<BoundProtPosition>& boundProtPositions)
 {
     pwl2limodsat::BoundaryPrototypeCollection localBoundProtData;
-    pwl2limodsat::PiecewiseLinearFunctionData localPwlData;
+    std::vector<pwl2limodsat::PiecewiseLinearFunctionData> localPwlData;
     pwl2limodsat::BoundaryPrototypeCollection newBoundProtData = inputValues;
+
+    for ( unsigned outIdx : nnOutputIndexes )
+    {
+        pwl2limodsat::PiecewiseLinearFunctionData emptyPwlData;
+        localPwlData.push_back(emptyPwlData);
+    }
 
     writeBoundProtData(localBoundProtData, newBoundProtData);
 
@@ -435,11 +490,11 @@ std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
         }
     }
 
-    return std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
+    return std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
                      pwl2limodsat::BoundaryPrototypeCollection>(localPwlData, localBoundProtData);
 }
 
-void NeuralNetwork::pwlInfoMerge(const std::vector<std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
+void NeuralNetwork::pwlInfoMerge(const std::vector<std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
                                                              pwl2limodsat::BoundaryPrototypeCollection>>& threadsInfo)
 {
     unsigned boundProtDataInitialSize = boundProtData.size();
@@ -450,18 +505,22 @@ void NeuralNetwork::pwlInfoMerge(const std::vector<std::pair<pwl2limodsat::Piece
                              threadsInfo.at(i).second.begin() + boundProtDataInitialSize,
                              threadsInfo.at(i).second.end());
 
+
         for ( size_t j = 0; j < threadsInfo.at(i).first.size(); j++ )
         {
-            pwlData.push_back(threadsInfo.at(i).first.at(j));
-
-            if ( i > 0 )
+            for ( size_t k = 0; k < threadsInfo.at(i).first.at(j).size(); k++ )
             {
-                for ( size_t k = 0; k < pwlData.back().bound.size(); k++ )
-                    if ( pwlData.back().bound.at(k).first >= boundProtDataInitialSize )
-                    {
-                        pwlData.back().bound.at(k).first += boundProtDataCurrentSize;
-                        pwlData.back().bound.at(k).first -= boundProtDataInitialSize;
-                    }
+                pwlData.at(j).push_back(threadsInfo.at(i).first.at(j).at(k));
+
+                if ( i > 0 )
+                {
+                    for ( size_t l = 0; l < pwlData.at(j).back().bound.size(); l++ )
+                        if ( pwlData.at(j).back().bound.at(l).first >= boundProtDataInitialSize )
+                        {
+                            pwlData.at(j).back().bound.at(l).first += boundProtDataCurrentSize;
+                            pwlData.at(j).back().bound.at(l).first -= boundProtDataInitialSize;
+                        }
+                }
             }
         }
     }
@@ -486,12 +545,12 @@ void NeuralNetwork::net2pwlMultithreading(const pwl2limodsat::BoundaryPrototypeC
     size_t fixedNodes = ( cuttingNodes > fixedNodesMax ? fixedNodesMax : cuttingNodes );
     unsigned threadsNum = pow(2, fixedNodes);
 
-    std::vector<std::future<std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
+    std::vector<std::future<std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
                                       pwl2limodsat::BoundaryPrototypeCollection>>> threadsInfoFut;
     for ( unsigned i = 0; i < threadsNum; i++ )
         threadsInfoFut.push_back( async(&NeuralNetwork::partialNet2pwl, this, i, fixedNodes, inputValues, boundProtPositions) );
 
-    std::vector<std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
+    std::vector<std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
                           pwl2limodsat::BoundaryPrototypeCollection>> threadsInfo;
     for ( size_t i = 0; i < threadsInfoFut.size(); i++ )
         threadsInfo.push_back(threadsInfoFut.at(i).get());
@@ -526,12 +585,14 @@ void NeuralNetwork::net2pwl()
     pwlTranslation = true;
 }
 
-pwl2limodsat::PiecewiseLinearFunctionData NeuralNetwork::getPwlData()
+pwl2limodsat::PiecewiseLinearFunctionData NeuralNetwork::getPwlData(unsigned nnOutputIdx)
 {
+    size_t outIdx = getNnOutputIndexesIdx(nnOutputIdx);
+
     if ( !pwlTranslation )
         net2pwl();
 
-    return pwlData;
+    return pwlData.at(outIdx);
 }
 
 pwl2limodsat::BoundaryPrototypeCollection NeuralNetwork::getBoundProtData()
@@ -542,9 +603,11 @@ pwl2limodsat::BoundaryPrototypeCollection NeuralNetwork::getBoundProtData()
     return boundProtData;
 }
 
-void NeuralNetwork::printPwlFile()
+void NeuralNetwork::printPwlFile(unsigned nnOutputIdx)
 {
-    std::ofstream pwlFile(pwlFileName);
+    size_t outIdx = getNnOutputIndexesIdx(nnOutputIdx);
+
+    std::ofstream pwlFile(pwlFileName.at(outIdx));
 
     if ( !pwlTranslation )
         net2pwl();
@@ -566,34 +629,34 @@ void NeuralNetwork::printPwlFile()
         pwlFile << std::endl;
     }
 
-    for ( size_t i = 0; i < pwlData.size(); i++ )
+    for ( size_t i = 0; i < pwlData.at(outIdx).size(); i++ )
     {
         pwlFile << std::endl << "p ";
 
-        for ( size_t j = 0; j < pwlData.at(i).lpData.size(); j++ )
+        for ( size_t j = 0; j < pwlData.at(outIdx).at(i).lpData.size(); j++ )
         {
-            pwlFile << pwlData.at(i).lpData.at(j).first << " " << pwlData.at(i).lpData.at(j).second;
+            pwlFile << pwlData.at(outIdx).at(i).lpData.at(j).first << " " << pwlData.at(outIdx).at(i).lpData.at(j).second;
 
-            if ( j+1 != pwlData.at(i).lpData.size() )
+            if ( j+1 != pwlData.at(outIdx).at(i).lpData.size() )
                 pwlFile << " ";
             else
                 pwlFile << std::endl;
         }
 
-        for ( size_t j = 0; j < pwlData.at(i).bound.size(); j++ )
+        for ( size_t j = 0; j < pwlData.at(outIdx).at(i).bound.size(); j++ )
         {
-            if ( pwlData.at(i).bound.at(j).second == pwl2limodsat::GeqZero )
+            if ( pwlData.at(outIdx).at(i).bound.at(j).second == pwl2limodsat::GeqZero )
                 pwlFile << "g ";
             else
                 pwlFile << "l ";
 
-            pwlFile << pwlData.at(i).bound.at(j).first + 1;
+            pwlFile << pwlData.at(outIdx).at(i).bound.at(j).first + 1;
 
-            if ( j+1 != pwlData.at(i).bound.size() )
+            if ( j+1 != pwlData.at(outIdx).at(i).bound.size() )
                 pwlFile << std::endl;
         }
 
-        if ( i+1 != pwlData.size() )
+        if ( i+1 != pwlData.at(outIdx).size() )
             pwlFile << std::endl;
     }
 }

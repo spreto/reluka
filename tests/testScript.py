@@ -97,7 +97,7 @@ def pwlFileParser(pwlFileName):
 
     return pwlData
 
-def runPwlTest(fileName, torchModel, pwlData):
+def runPwlTest(fileName, torchModel, pwlData, outputNum):
     global summary
     results = []
     statistics = [0,0]
@@ -115,7 +115,7 @@ def runPwlTest(fileName, torchModel, pwlData):
 
         singleResult = "{:3d}".format(i+1) + " | "
 
-        if abs(torchValue.item() - pwlValue) < 10**-PRECISION:
+        if abs(torchValue[outputNum].item() - pwlValue) < 10**-PRECISION:
             singleResult += "SUCCESS :-D | "
             statistics[0] += 1
         else:
@@ -124,7 +124,7 @@ def runPwlTest(fileName, torchModel, pwlData):
 
         for j in range(inputDim):
             singleResult += "x" + str(j+1) + ": {:.{}f}".format(x[j], PRECISION) + " | "
-        singleResult += "| pwl: " + "{:.{}f}".format(pwlValue, PRECISION) + " | torch: " + "{:.{}f}".format(torchValue.item(), PRECISION)
+        singleResult += "| pwl: " + "{:.{}f}".format(pwlValue, PRECISION) + " | torch: " + "{:.{}f}".format(torchValue[outputNum].item(), PRECISION)
 
         results.append(singleResult)
 
@@ -157,9 +157,9 @@ def runRandomPwlTest(fileName, inputDim, hiddenDim, hiddenNum):
     torch.onnx.export(torchModel, toOnnxInput, data_folder+fileName+".onnx")
     os.system(reluka_path+" "+data_folder+fileName+".onnx")
 
-    pwlData = pwlFileParser(fileName+".pwl")
+    pwlData = pwlFileParser(fileName+"_0.pwl")
 
-    runPwlTest(fileName, torchModel, pwlData)
+    runPwlTest(fileName, torchModel, pwlData, 0)
 
 def createSmt(fileName, smtFileName, dimension, values):
     formula = []
@@ -365,6 +365,58 @@ def runRandomLimodsatTest(fileName, inputDim, hiddenDim, hiddenNum):
 
     runLimodsatTest(fileName, torchModel, inputDim, latticePropertyMessage)
 
+def runMultiPwlTest(fileName, torchModel, pwlData):
+    global summary
+    results = []
+    statistics = [0,0]
+
+    inputDim = len(pwlData[1][0]) - 1
+
+    for i in range(SINGLE_NN_TEST_NUM):
+        x = []
+
+        for j in range(inputDim):
+            x.append(random.uniform(0,1))
+    
+        torchValue = torchModel(torch.as_tensor(x).float())
+        pwlValue = evaluatePwl(pwlData, x)
+
+        singleResult = "{:3d}".format(i+1) + " | "
+
+        if abs(torchValue.item() - pwlValue) < 10**-PRECISION:
+            singleResult += "SUCCESS :-D | "
+            statistics[0] += 1
+        else:
+            singleResult += "FAIL!! :-(  | "
+            statistics[1] += 1
+
+        for j in range(inputDim):
+            singleResult += "x" + str(j+1) + ": {:.{}f}".format(x[j], PRECISION) + " | "
+        singleResult += "| pwl: " + "{:.{}f}".format(pwlValue, PRECISION) + " | torch: " + "{:.{}f}".format(torchValue.item(), PRECISION)
+
+        results.append(singleResult)
+
+    resultsFile = open(data_folder+fileName+".res", "w")
+
+    message = fileName + ": "
+    if not statistics[1]:
+        message += "PASSED ALL EVALUATIONS!!!"
+    elif not statistics[0]:
+        message += "FAILED all evaluations :("
+    else:
+        message += "PASSED: " + str(statistics[0]) + " | failed: " + str(statistics[1])
+
+    resultsFile.write(message+"\n\n")
+    print(message)
+    summary.append(message)
+
+    for res in range(len(results)):
+        resultsFile.write(results[res])
+        if res != len(results)-1:
+            resultsFile.write("\n")
+
+    resultsFile.close()
+
 def runRandomMultiPwlTest(fileName, inputDim, hiddenDim, hiddenNum, outputDim):
     torchModel = RandPwlNeuralNet(inputDim, hiddenDim, hiddenNum, outputDim)
     torch.save(torchModel, data_folder+fileName+".torch")
@@ -373,6 +425,10 @@ def runRandomMultiPwlTest(fileName, inputDim, hiddenDim, hiddenNum, outputDim):
     torch.onnx.export(torchModel, toOnnxInput, data_folder+fileName+".onnx")
 
     os.system(reluka_path+" "+data_folder+fileName+".onnx")
+
+    for outputNum in range(outputDim):
+        pwlData = pwlFileParser(fileName+"_"+str(outputNum)+".pwl")
+        runPwlTest(fileName+"_"+str(outputNum), torchModel, pwlData, outputNum)
 
 def createSummary():
     global summary
@@ -444,11 +500,12 @@ elif TEST_MODE is TestMode.MultiPWL:
         for nodesNum in range(MAX_NODES):
             for layersNum in range(MAX_LAYERS):
                 for outputsNum in range(MAX_OUTPUTS):
-                    runRandomMultiPwlTest("test_"+str(inputsNum+1)+"_"+str(nodesNum+1)+"_"+str(layersNum+1)+"_"+str(outputsNum+1),
-                                          inputsNum+1,
-                                          nodesNum+1,
-                                          layersNum+1,
-                                          outputsNum+1)
+                    for config in range(SINGLE_CONFIG_TEST_NUM):
+                        runRandomMultiPwlTest("test_"+str(inputsNum+1)+"_"+str(nodesNum+1)+"_"+str(layersNum+1)+"_"+str(outputsNum+1)+"_n"+str(config+1),
+                                              inputsNum+1,
+                                              nodesNum+1,
+                                              layersNum+1,
+                                              outputsNum+1)
 
     createSummary()
 

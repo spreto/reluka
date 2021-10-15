@@ -12,32 +12,44 @@ class NeuralNetwork
 {
     public:
         NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                      const std::vector<unsigned>& inputNnOutputIndexes,
                       std::string onnxFileName,
                       bool multithreading);
         NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                      std::string onnxFileName,
+                      bool multithreading);
+        NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                      const std::vector<unsigned>& inputNnOutputIndexes,
                       std::string onnxFileName);
-        pwl2limodsat::PiecewiseLinearFunctionData getPwlData();
+        NeuralNetwork(const NeuralNetworkData& inputNeuralNetwork,
+                      std::string onnxFileName);
+        pwl2limodsat::PiecewiseLinearFunctionData getPwlData(unsigned nnOutputIdx);
         pwl2limodsat::BoundaryPrototypeCollection getBoundProtData();
-        void printPwlFile();
-        std::string getPwlFileName() { return pwlFileName; }
+        std::string getPwlFileName(unsigned nnOutputIdx) { return pwlFileName.at(getNnOutputIndexesIdx(nnOutputIdx)); }
+        size_t getOutputDimension() { return neuralNetwork.back().size(); }
+        std::vector<unsigned> getNnOutputIndexes() { return nnOutputIndexes; }
 
         static pwl2limodsat::LPCoefNonNegative gcd(pwl2limodsat::LPCoefNonNegative a,
                                                    pwl2limodsat::LPCoefNonNegative b);
         template<class T> static pwl2limodsat::LinearPieceCoefficient dec2frac(T decValue);
 
+        void printPwlFile(unsigned nnOutputIdx);
+
     private:
-        std::string pwlFileName;
+        std::vector<std::string> pwlFileName;
         enum ProcessingMode { Single, Multi };
         ProcessingMode processingMode;
 
         NeuralNetworkData neuralNetwork;
 
-        pwl2limodsat::PiecewiseLinearFunctionData pwlData;
+        std::vector<unsigned> nnOutputIndexes;
+        std::vector<pwl2limodsat::PiecewiseLinearFunctionData> pwlData;
         pwl2limodsat::BoundaryPrototypeCollection boundProtData;
 
         bool pwlTranslation = false;
 
         void setProcessingMode(ProcessingMode mode) { processingMode = mode; }
+        size_t getNnOutputIndexesIdx(unsigned nnOutputIndex);
 
         BoundProtPosition boundProtPosition(const pwl2limodsat::BoundaryPrototypeCollection& boundProtData,
                                             pwl2limodsat::BoundProtIndex bIdx);
@@ -52,9 +64,9 @@ class NeuralNetwork
                                                                       const std::vector<BoundProtPosition>& boundProtPositions);
         void writePwlData(pwl2limodsat::PiecewiseLinearFunctionData& pwlData,
                           const pwl2limodsat::BoundaryPrototypeCollection& boundProtData,
-                          const pwl2limodsat::BoundaryPrototypeCollection& inputValues,
+                          const pwl2limodsat::BoundaryPrototype& inputValues,
                           const pwl2limodsat::BoundaryCollection& currentBoundData,
-                          pwl2limodsat::BoundProtIndex newBoundProtFirstIdx);
+                          std::pair<pwl2limodsat::BoundProtIndex,pwl2limodsat::BoundProtIndex> newBoundProtIdx);
         bool iterate(size_t limitIterationIdx,
                      std::vector<pwl2limodsat::BoundarySymbol>& iteration,
                      size_t& currentIterationIdx,
@@ -66,7 +78,7 @@ class NeuralNetwork
                      pwl2limodsat::BoundaryCollection& boundData);
 
         void net2pwl(pwl2limodsat::BoundaryPrototypeCollection& boundProtData,
-                     pwl2limodsat::PiecewiseLinearFunctionData& pwlData,
+                     std::vector<pwl2limodsat::PiecewiseLinearFunctionData>& pwlData,
                      const pwl2limodsat::BoundaryPrototypeCollection& inputValues,
                      const pwl2limodsat::BoundaryCollection& currentBoundData,
                      size_t layerNum);
@@ -74,12 +86,12 @@ class NeuralNetwork
                      const pwl2limodsat::BoundaryCollection& currentBoundData,
                      size_t layerNum);
 
-        std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
+        std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
                   pwl2limodsat::BoundaryPrototypeCollection> partialNet2pwl(unsigned startingPoint,
                                                                             size_t fixedNodesNum,
                                                                             const pwl2limodsat::BoundaryPrototypeCollection& inputValues,
                                                                             const std::vector<BoundProtPosition>& boundProtPositions);
-        void pwlInfoMerge(const std::vector<std::pair<pwl2limodsat::PiecewiseLinearFunctionData,
+        void pwlInfoMerge(const std::vector<std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
                                                       pwl2limodsat::BoundaryPrototypeCollection>>& threadsInfo);
         void net2pwlMultithreading(const pwl2limodsat::BoundaryPrototypeCollection& inputValues);
 
