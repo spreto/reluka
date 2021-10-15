@@ -7,7 +7,7 @@
 
 namespace reluka
 {
-Property::Property(const char* inputVnnlibFileName,
+Property::Property(std::string inputVnnlibFileName,
                    pwl2limodsat::VariableManager *varMan) :
     vnnlibFileName(inputVnnlibFileName),
     variableManager(varMan)
@@ -81,12 +81,12 @@ void Property::parseVnnlibDeclareConst()
     if ( currentVnnlibLine.compare(currentLinePosition, 2, "X_") == 0 )
     {
         inputVar = true;
-        testingDim = inputDimension;
+        testingDim = nnInputDimension;
     }
     else if ( currentVnnlibLine.compare(currentLinePosition, 2, "Y_") == 0 )
     {
         inputVar = false;
-        testingDim = outputDimension;
+        testingDim = nnOutputDimension;
     }
     else
         throw std::invalid_argument("Not in standard vnnlib file format.1,5");
@@ -99,9 +99,9 @@ void Property::parseVnnlibDeclareConst()
                                    std::to_string(testingDim)) == 0 )
     {
         if ( inputVar )
-            inputDimension++;
+            nnInputDimension++;
         else
-            outputDimension++;
+            nnOutputDimension++;
     }
     else
         throw std::invalid_argument("Not in standard vnnlib file format.2");
@@ -143,7 +143,7 @@ std::pair<Property::AssertType,lukaFormula::Modsat> Property::parseVnnlibAtomicA
 
             if ( currentVnnlibLine.compare(beginPos[i], 2, "X_") == 0 )
             {
-                if ( varNum < inputDimension )
+                if ( varNum < nnInputDimension )
                 {
                     assertType = Input;
                     form[i] = lukaFormula::Formula(pwl2limodsat::Variable(varNum+1));
@@ -153,19 +153,19 @@ std::pair<Property::AssertType,lukaFormula::Modsat> Property::parseVnnlibAtomicA
             }
             else
             {
-                if ( varNum < outputDimension )
+                if ( varNum < nnOutputDimension )
                 {
                     assertType = Output;
                     pwl2limodsat::Variable auxVar;
 
-                    std::map<unsigned,pwl2limodsat::Variable>::iterator it = outputInfo.find(varNum);
-                    if ( it == outputInfo.end() )
+                    std::map<unsigned,pwl2limodsat::Variable>::iterator it = nnOutputInfo.find(varNum);
+                    if ( it == nnOutputInfo.end() )
                         auxVar = variableManager->newVariable();
                     else
                         auxVar = it->second;
 
                     form[i] = lukaFormula::Formula(auxVar);
-                    outputInfo[varNum] = auxVar;
+                    nnOutputInfo[varNum] = auxVar;
                 }
                 else
                     throw std::invalid_argument("Not in standard vnnlib file format.5");
@@ -354,7 +354,7 @@ void Property::buildProperty()
     if ( !propertyBuilding )
     {
         readDeclarations();
-        variableManager->setDimension(inputDimension);
+        variableManager->setDimension(nnInputDimension);
         vnnlib2property();
         propertyBuilding = true;
     }
@@ -362,7 +362,32 @@ void Property::buildProperty()
 
 void Property::setOutputAddress(pwl2limodsat::PiecewiseLinearFunction* pwlAddress)
 {
-    outputAddresses.push_back(pwlAddress);
+    nnOutputAddresses.push_back(pwlAddress);
+}
+
+std::vector<unsigned> Property::getNnOutputIndexes()
+{
+    if ( !propertyBuilding )
+        buildProperty();
+
+    std::vector<unsigned> nnOutputIndexes;
+
+    for ( unsigned i = 0; i < nnOutputDimension; i++ )
+        if ( nnOutputInfo.count(i) != 0 )
+            nnOutputIndexes.push_back(i);
+
+    return nnOutputIndexes;
+}
+
+pwl2limodsat::Variable Property::getVariable(unsigned nnOutputIdx)
+{
+    if ( !propertyBuilding )
+        buildProperty();
+
+    if ( nnOutputInfo.count(nnOutputIdx) == 0 )
+        throw std::invalid_argument("Vnnlib file does not refer to such output index.");
+
+    return nnOutputInfo[nnOutputIdx];
 }
 
 void Property::printLipropFile()
@@ -370,13 +395,13 @@ void Property::printLipropFile()
     if ( !propertyBuilding )
         buildProperty();
 
-    if ( outputDimension != outputAddresses.size() )
+    if ( nnOutputDimension != nnOutputAddresses.size() )
         throw std::invalid_argument("Pwl addresses not found.");
 
     std::ofstream propertyFile(propertyFileName);
     propertyFile << "Cons" << std::endl << std::endl;
 
-    for ( pwl2limodsat::PiecewiseLinearFunction* pwl : outputAddresses )
+    for ( pwl2limodsat::PiecewiseLinearFunction* pwl : nnOutputAddresses )
     {
         for ( pwl2limodsat::RegionalLinearPiece rlp : pwl->getLinearPieceCollection() )
             rlp.printModsatSetAs(&propertyFile, "P1:");

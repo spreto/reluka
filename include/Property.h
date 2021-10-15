@@ -13,11 +13,13 @@ namespace reluka
 class Property
 {
     public:
-        Property(const char* inputVnnlibFileName,
+        Property(std::string inputVnnlibFileName,
                  pwl2limodsat::VariableManager *varMan);
         virtual ~Property();
         void buildProperty();
         void setOutputAddress(pwl2limodsat::PiecewiseLinearFunction *pwlAddress);
+        std::vector<unsigned> getNnOutputIndexes();
+        pwl2limodsat::Variable getVariable(unsigned nnOutputIdx);
         void printLipropFile();
 
     protected:
@@ -31,9 +33,9 @@ class Property
 
         pwl2limodsat::VariableManager *variableManager;
 
-        unsigned inputDimension = 0, outputDimension = 0;
-        std::map<unsigned,pwl2limodsat::Variable> outputInfo;
-        std::vector<pwl2limodsat::PiecewiseLinearFunction*> outputAddresses;
+        unsigned nnInputDimension = 0, nnOutputDimension = 0;
+        std::map<unsigned,pwl2limodsat::Variable> nnOutputInfo;
+        std::vector<pwl2limodsat::PiecewiseLinearFunction*> nnOutputAddresses;
         std::vector<lukaFormula::Formula> premiseFormulas;
         lukaFormula::Formula conclusionFormula;
         bool propertyBuilding = false;

@@ -4,7 +4,7 @@
 
 namespace reluka
 {
-OnnxParser::OnnxParser(const char* inputOnnxFileName) : onnxFileName(inputOnnxFileName)
+OnnxParser::OnnxParser(std::string inputOnnxFileName) : onnxFileName(inputOnnxFileName)
 {
     std::ifstream onnxFile(inputOnnxFileName, std::ios_base::binary);
     onnxNeuralNetwork.ParseFromIstream(&onnxFile);

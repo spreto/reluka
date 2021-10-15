@@ -33,6 +33,7 @@ class NeuralNetwork
                                                    pwl2limodsat::LPCoefNonNegative b);
         template<class T> static pwl2limodsat::LinearPieceCoefficient dec2frac(T decValue);
 
+        void buildPwlData() { net2pwl(); }
         void printPwlFile(unsigned nnOutputIdx);
 
     private:

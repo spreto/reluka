@@ -9,7 +9,7 @@ namespace reluka
 class OnnxParser
 {
     public:
-        OnnxParser(const char* inputOnnxFileName);
+        OnnxParser(std::string inputOnnxFileName);
         NeuralNetworkData getNeuralNetwork();
         std::string getOnnxFileName() { return onnxFileName; }
 
