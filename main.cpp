@@ -93,32 +93,36 @@ int main(int argc, char **argv)
 {
     for ( int argNum = 1; argNum < argc; argNum++ )
     {
-        if ( argv[argNum] == "-pwl" )
+        std::string arg(argv[argNum]);
+
+        if ( arg.compare("-pwl") == 0 )
             printPwl = true;
-        else if ( argv[argNum] == "-limodsat" )
+        else if ( arg.compare("-limodsat") == 0 )
             printLimodsat = true;
-        else if ( argv[argNum] == "-liprop" )
+        else if ( arg.compare("-liprop") == 0 )
             printLiprop = true;
-        else if ( argv[argNum] == "-print" )
+        else if ( arg.compare("-print") == 0 )
         {
             printPwl = true;
             printLimodsat = true;
             printLiprop = true;
         }
-        else if ( argv[argNum] == "-onnx" )
+        else if ( arg.compare("-onnx") == 0 )
         {
             argNum++;
-            if ( argv[argNum][0] == '-' )
+            arg = argv[argNum];
+            if ( arg.compare(0, 1, "-") == 0 )
                 throw std::invalid_argument("Missing onnx file path.");
-            onnxFileName = argv[argNum];
+            onnxFileName = arg;
             hasOnnx = true;
         }
-        else if ( argv[argNum] == "-vnnlib" )
+        else if ( arg.compare("-vnnlib") == 0 )
         {
             argNum++;
-            if ( argv[argNum][0] == '-' )
+            arg = argv[argNum];
+            if ( arg.compare(0, 1, "-") == 0 )
                 throw std::invalid_argument("Missing vnnlib file path.");
-            vnnlibFileName = argv[argNum];
+            vnnlibFileName = arg;
             vnnlib = true;
         }
     }
