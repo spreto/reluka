@@ -13,14 +13,15 @@ OnnxParser::OnnxParser(std::string inputOnnxFileName) : onnxFileName(inputOnnxFi
 
 unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
 {
-    if ( ( onnxNeuralNetwork.graph().node(beginingNode+1).op_type().compare("Add") != 0 ) ||
+/*    if ( ( onnxNeuralNetwork.graph().node(beginingNode+1).op_type().compare("Add") != 0 ) ||
          ( ( onnxNeuralNetwork.graph().node(beginingNode+2).op_type().compare("Relu") != 0 ) &&
            ( onnxNeuralNetwork.graph().node(beginingNode+2).op_type().compare("Clip") != 0 ) ) ||
          ( onnxNeuralNetwork.graph().node(beginingNode).output(0).compare( onnxNeuralNetwork.graph().node(beginingNode+1).input(1) ) != 0 ) ||
          ( onnxNeuralNetwork.graph().node(beginingNode+1).output(0).compare( onnxNeuralNetwork.graph().node(beginingNode+2).input(0) ) != 0 ) )
-        throw std::invalid_argument("Not a recognizable onnx format.");
+        throw std::invalid_argument("Not a recognizable onnx format."); */
 
     int biasIdx = 0;
+//    while ( onnxNeuralNetwork.graph().initializer(biasIdx).name().compare( onnxNeuralNetwork.graph().node(beginingNode+1).input(1) ) != 0 )
     while ( onnxNeuralNetwork.graph().initializer(biasIdx).name().compare( onnxNeuralNetwork.graph().node(beginingNode+1).input(0) ) != 0 )
     {
         biasIdx++;
@@ -75,6 +76,14 @@ void OnnxParser::onnx2net()
 {
     int currentNode = 0;
 
+    while ( currentNode < onnxNeuralNetwork.graph().node_size() &&
+            ( onnxNeuralNetwork.graph().node(currentNode).op_type().compare("Flatten") == 0 ||
+              onnxNeuralNetwork.graph().node(currentNode).op_type().compare("Sub") == 0 ) )
+        currentNode++;
+
+    if ( currentNode == onnxNeuralNetwork.graph().node_size() )
+        throw std::invalid_argument("Not a recognizable onnx format.");
+
     while ( currentNode < onnxNeuralNetwork.graph().node_size() )
     {
         if ( onnxNeuralNetwork.graph().node(currentNode).op_type().compare("MatMul") == 0 )
@@ -86,7 +95,7 @@ void OnnxParser::onnx2net()
         else
         {
             throw std::invalid_argument("Not a recognizable onnx format.");
-            currentNode++;
+            currentNode++; // isso aqui faz sentido??
         }
     }
 
