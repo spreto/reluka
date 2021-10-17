@@ -1,5 +1,5 @@
 #include <iostream>
-#include "Property.h"
+#include "VnnlibProperty.h"
 #include "OnnxParser.h"
 #include "NeuralNetwork.h"
 #include "VariableManager.h"
@@ -38,9 +38,9 @@ void onlyIntermediateSteps()
         printLimodsat = true;
     }
 
-    reluka::OnnxParser onnx(onnxFileName);
-    reluka::NeuralNetwork nn( onnx.getNeuralNetwork(), onnx.getOnnxFileName() );
-    nn.buildPwlData();
+    reluka::OnnxParser onnx(onnxFileName); std::cout << "Começou o onnx parser..." << std::endl;
+    reluka::NeuralNetwork nn( onnx.getNeuralNetwork(), onnx.getOnnxFileName() ); std::cout << "Começou a construir o arquivo pwl." << std::endl;
+    nn.buildPwlData(); std::cout << "Começou a construir as representações modsat." << std::endl;
 
     for ( size_t outIdx = 0; outIdx < nn.getOutputDimension(); outIdx++ )
     {
@@ -60,30 +60,34 @@ void onlyIntermediateSteps()
 void vnnlibRoutine()
 {
     pwl2limodsat::VariableManager vm;
-    reluka::Property vnnlib( vnnlibFileName, &vm );
-    vnnlib.buildProperty();
+    reluka::VnnlibProperty vnnlib( vnnlibFileName, &vm );
+    vnnlib.buildVnnlibProperty();
     reluka::OnnxParser onnx( onnxFileName );
     reluka::NeuralNetwork nn(onnx.getNeuralNetwork(), vnnlib.getNnOutputIndexes(), onnx.getOnnxFileName());
     nn.buildPwlData();
+
+    std::vector<pwl2limodsat::PiecewiseLinearFunction> pwl;
 
     for ( unsigned nnOutputIdx : nn.getNnOutputIndexes() )
     {
         if ( printPwl )
             nn.printPwlFile(nnOutputIdx);
 
-        pwl2limodsat::PiecewiseLinearFunction pwl( nn.getPwlData(nnOutputIdx),
-                                                   nn.getBoundProtData(),
-                                                   nn.getPwlFileName(nnOutputIdx),
-                                                   &vm );
+        pwl2limodsat::PiecewiseLinearFunction pwlAux( nn.getPwlData(nnOutputIdx),
+                                                      nn.getBoundProtData(),
+                                                      nn.getPwlFileName(nnOutputIdx),
+                                                      &vm );
+        pwl.push_back( pwlAux );
 
         if ( printLimodsat )
-            pwl.printLimodsatFile();
+            pwl.back().printLimodsatFile();
         else
-            pwl.representModsat();
+            pwl.back().representModsat();
 
-        pwl.equivalentTo(vnnlib.getVariable(nnOutputIdx));
-        vnnlib.setOutputAddress(&pwl);
+        pwl.back().equivalentTo(vnnlib.getVariable(nnOutputIdx));
     }
+
+    vnnlib.setOutputAddresses(&pwl);
 
     if ( printLiprop )
         vnnlib.printLipropFile();
