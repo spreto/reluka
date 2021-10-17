@@ -36,8 +36,7 @@ class VnnlibProperty
         unsigned nnInputDimension = 0, nnOutputDimension = 0;
         std::map<unsigned,pwl2limodsat::Variable> nnOutputInfo;
         std::vector<pwl2limodsat::PiecewiseLinearFunction> *nnOutputAddresses;
-        std::vector<lukaFormula::Formula> premiseFormulas;
-        lukaFormula::Formula conclusionFormula;
+        std::vector<lukaFormula::Formula> propertyFormulas;
         bool propertyBuilding = false;
 
         enum AssertType { Undefined, Input, Output };

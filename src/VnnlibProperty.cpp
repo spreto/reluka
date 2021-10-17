@@ -324,7 +324,7 @@ void VnnlibProperty::vnnlib2property()
                 throw std::invalid_argument("Not in standard vnnlib file format.");
             else
             {
-                std::pair<AssertType,lukaFormula::Modsat> assertReturn = parseVnnlibAssert();
+                lukaFormula::Modsat assertReturn = parseVnnlibAssert().second;
 
                 if ( currentVnnlibLine.compare(currentLinePosition, 1, ")") != 0 )
                     throw std::invalid_argument("Not in standard vnnlib file format.");
@@ -334,14 +334,11 @@ void VnnlibProperty::vnnlib2property()
                     nextNonSpace();
                 }
 
-                if ( assertReturn.first == Input )
-                    premiseFormulas.push_back(assertReturn.second.phi);
-                else
-                    conclusionFormula = assertReturn.second.phi;
+                propertyFormulas.push_back(assertReturn.phi);
 
-                premiseFormulas.insert(premiseFormulas.end(),
-                                       assertReturn.second.Phi.begin(),
-                                       assertReturn.second.Phi.end());
+                propertyFormulas.insert(propertyFormulas.end(),
+                                        assertReturn.Phi.begin(),
+                                        assertReturn.Phi.end());
             }
         }
         else
@@ -399,24 +396,21 @@ void VnnlibProperty::printLipropFile()
         throw std::invalid_argument("Pwl addresses not found.");
 
     std::ofstream propertyFile(propertyFileName);
-    propertyFile << "Cons" << std::endl << std::endl;
+    propertyFile << "Sat" << std::endl << std::endl;
 
     for ( pwl2limodsat::PiecewiseLinearFunction pwl : *nnOutputAddresses )
     {
         for ( pwl2limodsat::RegionalLinearPiece rlp : pwl.getLinearPieceCollection() )
-            rlp.printModsatSetAs(&propertyFile, "P1:");
+            rlp.printModsatSetAs(&propertyFile, "f:");
 
-        propertyFile << "P2:" << std::endl;
+        propertyFile << "f:" << std::endl;
         pwl.getLatticeFormula().print(&propertyFile);
     }
 
-    for ( lukaFormula::Formula pForm : premiseFormulas )
+    for ( lukaFormula::Formula pForm : propertyFormulas )
     {
-        propertyFile << "P3:" << std::endl;
+        propertyFile << "f:" << std::endl;
         pForm.print(&propertyFile);
     }
-
-    propertyFile << std::endl << "C:" << std::endl;
-    conclusionFormula.print(&propertyFile);
 }
 }
