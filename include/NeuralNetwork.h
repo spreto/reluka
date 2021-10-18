@@ -26,6 +26,7 @@ class NeuralNetwork
         pwl2limodsat::PiecewiseLinearFunctionData getPwlData(unsigned nnOutputIdx);
         pwl2limodsat::BoundaryPrototypeCollection getBoundProtData();
         std::string getPwlFileName(unsigned nnOutputIdx) { return pwlFileName.at(getNnOutputIndexesIdx(nnOutputIdx)); }
+        size_t getInputDimension() { return neuralNetwork.front().at(0).size()-1; }
         size_t getOutputDimension() { return neuralNetwork.back().size(); }
         std::vector<unsigned> getNnOutputIndexes() { return nnOutputIndexes; }
 
@@ -33,7 +34,7 @@ class NeuralNetwork
                                                    pwl2limodsat::LPCoefNonNegative b);
         template<class T> static pwl2limodsat::LinearPieceCoefficient dec2frac(T decValue);
 
-        void buildPwlData() { net2pwl(); }
+        void buildPwlData();
         void printPwlFile(unsigned nnOutputIdx);
 
     private:

@@ -7,9 +7,8 @@
 
 namespace reluka
 {
-VnnlibProperty::VnnlibProperty(std::string inputVnnlibFileName,
+VnnlibProperty::VnnlibProperty(std::string vnnlibFileName,
                                pwl2limodsat::VariableManager *varMan) :
-                               vnnlibFileName(inputVnnlibFileName),
                                variableManager(varMan)
 {
     vnnlibFile.open(vnnlibFileName);
@@ -359,19 +358,35 @@ void VnnlibProperty::buildVnnlibProperty()
 
 void VnnlibProperty::setOutputAddresses(std::vector<pwl2limodsat::PiecewiseLinearFunction> *pwlAddresses)
 {
+    if ( !propertyBuilding )
+        buildVnnlibProperty();
+
+    if ( pwlAddresses->size() != nnOutputInfo.size() )
+        throw std::invalid_argument("Different number of pwl functions than of outputs declared in the vnnlib file.");
+
+    for ( size_t i = 0; i < nnOutputInfo.size(); i++ )
+        pwlAddresses->at(i).equivalentTo(nnOutputInfo.at(i));
+
     nnOutputAddresses = pwlAddresses;
 }
 
-std::vector<unsigned> VnnlibProperty::getNnOutputIndexes()
+void VnnlibProperty::buildNnOutputIndexes()
 {
     if ( !propertyBuilding )
         buildVnnlibProperty();
 
-    std::vector<unsigned> nnOutputIndexes;
+    if ( nnOutputIndexes.empty() )
+    {
+        for ( unsigned i = 0; i < nnOutputDimension; i++ )
+            if ( nnOutputInfo.count(i) != 0 )
+                nnOutputIndexes.push_back(i);
+    }
+}
 
-    for ( unsigned i = 0; i < nnOutputDimension; i++ )
-        if ( nnOutputInfo.count(i) != 0 )
-            nnOutputIndexes.push_back(i);
+std::vector<unsigned> VnnlibProperty::getNnOutputIndexes()
+{
+    if ( nnOutputIndexes.empty() )
+        buildNnOutputIndexes();
 
     return nnOutputIndexes;
 }
@@ -393,7 +408,7 @@ void VnnlibProperty::printLipropFile()
         buildVnnlibProperty();
 
     if ( nnOutputDimension != nnOutputAddresses->size() )
-        throw std::invalid_argument("Pwl addresses not found.");
+        throw std::invalid_argument("Pwl addresses are not coherent.");
 
     std::ofstream propertyFile(propertyFileName);
     propertyFile << "Sat" << std::endl << std::endl;

@@ -416,7 +416,7 @@ std::pair<std::vector<pwl2limodsat::PiecewiseLinearFunctionData>,
     std::vector<pwl2limodsat::PiecewiseLinearFunctionData> localPwlData;
     pwl2limodsat::BoundaryPrototypeCollection newBoundProtData = inputValues;
 
-    for ( unsigned outIdx : nnOutputIndexes )
+    for ( unsigned outIdx = 0; outIdx < nnOutputIndexes.size(); outIdx++ )
     {
         pwl2limodsat::PiecewiseLinearFunctionData emptyPwlData;
         localPwlData.push_back(emptyPwlData);
@@ -601,6 +601,12 @@ pwl2limodsat::BoundaryPrototypeCollection NeuralNetwork::getBoundProtData()
         net2pwl();
 
     return boundProtData;
+}
+
+void NeuralNetwork::buildPwlData()
+{
+    if ( !pwlTranslation )
+        net2pwl();
 }
 
 void NeuralNetwork::printPwlFile(unsigned nnOutputIdx)

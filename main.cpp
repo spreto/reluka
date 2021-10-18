@@ -1,9 +1,10 @@
 #include <iostream>
-#include "VnnlibProperty.h"
 #include "OnnxParser.h"
 #include "NeuralNetwork.h"
 #include "VariableManager.h"
 #include "PiecewiseLinearFunction.h"
+#include "VnnlibProperty.h"
+#include "GlobalRobustness.h"
 
 bool printPwl = false;
 bool printLimodsat = false;
@@ -38,9 +39,9 @@ void onlyIntermediateSteps()
         printLimodsat = true;
     }
 
-    reluka::OnnxParser onnx(onnxFileName); std::cout << "Começou o onnx parser..." << std::endl;
-    reluka::NeuralNetwork nn( onnx.getNeuralNetwork(), onnx.getOnnxFileName() ); std::cout << "Começou a construir o arquivo pwl." << std::endl;
-    nn.buildPwlData(); std::cout << "Começou a construir as representações modsat." << std::endl;
+    reluka::OnnxParser onnx(onnxFileName);
+    reluka::NeuralNetwork nn( onnx.getNeuralNetwork(), onnx.getOnnxFileName() );
+    nn.buildPwlData();
 
     for ( size_t outIdx = 0; outIdx < nn.getOutputDimension(); outIdx++ )
     {
@@ -58,7 +59,7 @@ void onlyIntermediateSteps()
 }
 
 void vnnlibRoutine()
-{
+{ // for testing purposes
     pwl2limodsat::VariableManager vm;
     reluka::VnnlibProperty vnnlib( vnnlibFileName, &vm );
     vnnlib.buildVnnlibProperty();
@@ -71,7 +72,7 @@ void vnnlibRoutine()
     for ( unsigned nnOutputIdx : nn.getNnOutputIndexes() )
     {
         if ( printPwl )
-            nn.printPwlFile(nnOutputIdx);
+            nn.printPwlFile( nnOutputIdx );
 
         pwl2limodsat::PiecewiseLinearFunction pwlAux( nn.getPwlData(nnOutputIdx),
                                                       nn.getBoundProtData(),
@@ -83,14 +84,42 @@ void vnnlibRoutine()
             pwl.back().printLimodsatFile();
         else
             pwl.back().representModsat();
-
-        pwl.back().equivalentTo(vnnlib.getVariable(nnOutputIdx));
     }
 
-    vnnlib.setOutputAddresses(&pwl);
+    vnnlib.setOutputAddresses( &pwl );
 
     if ( printLiprop )
         vnnlib.printLipropFile();
+}
+
+void globalRobustnessRoutine(std::string arg)
+{
+    reluka::OnnxParser onnx( arg );
+    reluka::NeuralNetwork nn(onnx.getNeuralNetwork(), onnx.getOnnxFileName());
+    nn.buildPwlData();
+    pwl2limodsat::VariableManager vm( nn.getInputDimension() );
+
+    std::vector<pwl2limodsat::PiecewiseLinearFunction> pwl;
+
+    for ( unsigned nnOutputIdx : nn.getNnOutputIndexes() )
+    {
+        if ( printPwl )
+            nn.printPwlFile( nnOutputIdx );
+
+        pwl2limodsat::PiecewiseLinearFunction pwlAux( nn.getPwlData(nnOutputIdx),
+                                                      nn.getBoundProtData(),
+                                                      nn.getPwlFileName(nnOutputIdx),
+                                                      &vm );
+        pwl.push_back( pwlAux );
+
+        if ( printLimodsat )
+            pwl.back().printLimodsatFile();
+        else
+            pwl.back().representModsat();
+    }
+
+    reluka::GlobalRobustness globalRobust(onnx.getOnnxFileName(), nn.getInputDimension(), nn.getOutputDimension(), &pwl, 0.5, &vm);
+    globalRobust.printLipropFile();
 }
 
 int main(int argc, char **argv)
@@ -130,7 +159,7 @@ int main(int argc, char **argv)
             vnnlib = true;
         }
     }
-
+/*
     if ( !hasOnnx )
         usage("A onnx file must be provided");
     else if ( !vnnlib )
@@ -139,6 +168,11 @@ int main(int argc, char **argv)
         vnnlibRoutine();
     else
         usage();
+*/
+    // for testing purposes
+    std::string arg(argv[1]);
+    globalRobustnessRoutine(arg);
+    //////
 
     return 0;
 }

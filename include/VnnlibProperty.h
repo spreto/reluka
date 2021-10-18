@@ -13,7 +13,7 @@ namespace reluka
 class VnnlibProperty
 {
     public:
-        VnnlibProperty(std::string inputVnnlibFileName,
+        VnnlibProperty(std::string vnnlibFileName,
                        pwl2limodsat::VariableManager *varMan);
         virtual ~VnnlibProperty();
         void buildVnnlibProperty();
@@ -25,7 +25,6 @@ class VnnlibProperty
     protected:
 
     private:
-        std::string vnnlibFileName;
         std::ifstream vnnlibFile;
         std::string currentVnnlibLine;
         size_t currentLinePosition = 0;
@@ -35,12 +34,15 @@ class VnnlibProperty
 
         unsigned nnInputDimension = 0, nnOutputDimension = 0;
         std::map<unsigned,pwl2limodsat::Variable> nnOutputInfo;
+        std::vector<unsigned> nnOutputIndexes;
         std::vector<pwl2limodsat::PiecewiseLinearFunction> *nnOutputAddresses;
         std::vector<lukaFormula::Formula> propertyFormulas;
         bool propertyBuilding = false;
 
         enum AssertType { Undefined, Input, Output };
         enum AtomicAssertType { LessEq, GreaterEq };
+
+        void buildNnOutputIndexes();
 
         bool nextNonSpace();
         void parseVnnlibDeclareConst();
