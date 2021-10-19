@@ -17,7 +17,7 @@ VnnlibProperty::VnnlibProperty(std::string vnnlibFileName,
         throw std::invalid_argument("Unable to open vnnlib file.");
 
     if ( vnnlibFile.eof() )
-        throw std::invalid_argument("Not in standard vnnlib file format.1");
+        throw std::invalid_argument("Not in standard vnnlib file format.");
 
     if ( vnnlibFileName.substr(vnnlibFileName.size()-7,7) == ".vnnlib" )
         propertyFileName = vnnlibFileName.substr(0,vnnlibFileName.size()-7);
@@ -88,7 +88,7 @@ void VnnlibProperty::parseVnnlibDeclareConst()
         testingDim = nnOutputDimension;
     }
     else
-        throw std::invalid_argument("Not in standard vnnlib file format.1,5");
+        throw std::invalid_argument("Not in standard vnnlib file format.");
 
     currentLinePosition += 2;
     size_t blockLength = currentVnnlibLine.find_first_of(" ", currentLinePosition) - currentLinePosition;
@@ -103,13 +103,13 @@ void VnnlibProperty::parseVnnlibDeclareConst()
             nnOutputDimension++;
     }
     else
-        throw std::invalid_argument("Not in standard vnnlib file format.2");
+        throw std::invalid_argument("Not in standard vnnlib file format.");
 
     currentLinePosition += blockLength;
     nextNonSpace();
 
     if ( currentVnnlibLine.compare(currentLinePosition, 4, "Real") != 0 )
-        throw std::invalid_argument("Not in standard vnnlib file format.3");
+        throw std::invalid_argument("Not in standard vnnlib file format.");
 
     currentLinePosition += 4;
     nextNonSpace();
@@ -118,14 +118,20 @@ void VnnlibProperty::parseVnnlibDeclareConst()
 std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseVnnlibAtomicAssert(AtomicAssertType atomicAssertType)
 {
     size_t beginPos[2], stringLength[2];
+    std::string curLine[2];
 
+    curLine[0] = currentVnnlibLine;
     beginPos[0] = currentLinePosition;
-    stringLength[0] = currentVnnlibLine.find_first_of(" ", beginPos[0]) - beginPos[0];
+    stringLength[0] = std::fmin( currentVnnlibLine.find_first_of(" ", beginPos[0]),
+                                 currentVnnlibLine.size() ) - beginPos[0];
     currentLinePosition = beginPos[0] + stringLength[0];
     nextNonSpace();
+
+    curLine[1] = currentVnnlibLine;
     beginPos[1] = currentLinePosition;
-    stringLength[1] = std::fmin( currentVnnlibLine.find_first_of(" ", beginPos[1]),
-                                 currentVnnlibLine.find_first_of(")", beginPos[1]) ) - beginPos[1];
+    stringLength[1] = std::fmin( std::fmin( currentVnnlibLine.find_first_of(" ", beginPos[1]),
+                                            currentVnnlibLine.find_first_of(")", beginPos[1]) ),
+                                 currentVnnlibLine.size() ) - beginPos[1];
     currentLinePosition = beginPos[1] + stringLength[1];
     nextNonSpace();
 
@@ -135,12 +141,12 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
 
     for ( unsigned i = 0; i < 2; i++ )
     {
-        if ( ( currentVnnlibLine.compare(beginPos[i], 2, "X_") == 0 ) ||
-             ( currentVnnlibLine.compare(beginPos[i], 2, "Y_") == 0 ) )
+        if ( ( curLine[i].compare(beginPos[i], 2, "X_") == 0 ) ||
+             ( curLine[i].compare(beginPos[i], 2, "Y_") == 0 ) )
         {
-            unsigned varNum = stoi(currentVnnlibLine.substr(beginPos[i]+2, stringLength[i]-2));
+            unsigned varNum = stoi(curLine[i].substr(beginPos[i]+2, stringLength[i]-2));
 
-            if ( currentVnnlibLine.compare(beginPos[i], 2, "X_") == 0 )
+            if ( curLine[i].compare(beginPos[i], 2, "X_") == 0 )
             {
                 if ( varNum < nnInputDimension )
                 {
@@ -148,7 +154,7 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
                     form[i] = lukaFormula::Formula(pwl2limodsat::Variable(varNum+1));
                 }
                 else
-                    throw std::invalid_argument("Not in standard vnnlib file format.4");
+                    throw std::invalid_argument("Not in standard vnnlib file format.");
             }
             else
             {
@@ -167,12 +173,12 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
                     nnOutputInfo[varNum] = auxVar;
                 }
                 else
-                    throw std::invalid_argument("Not in standard vnnlib file format.5");
+                    throw std::invalid_argument("Not in standard vnnlib file format.");
             }
         }
         else
         {
-            double constDouble = std::stod(currentVnnlibLine.substr(beginPos[i], stringLength[i]));
+            double constDouble = std::stod(curLine[i].substr(beginPos[i], stringLength[i]));
             pwl2limodsat::LinearPieceCoefficient constFraction = reluka::NeuralNetwork::dec2frac(constDouble);
 
             if ( !variableManager->isThereConstant(constFraction.second) )
@@ -204,7 +210,7 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
     assertPair.first = Undefined;
 
     if ( currentVnnlibLine.compare(currentLinePosition, 1, "(") != 0 )
-        throw std::invalid_argument("Not in standard vnnlib file format.6");
+        throw std::invalid_argument("Not in standard vnnlib file format.");
 
     currentLinePosition += 1;
     nextNonSpace();
@@ -215,7 +221,7 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
         nextNonSpace();
 
         if ( currentVnnlibLine.compare(currentLinePosition, 1, "(") != 0 )
-            throw std::invalid_argument("Not in standard vnnlib file format.7");
+            throw std::invalid_argument("Not in standard vnnlib file format.");
 
         while ( currentVnnlibLine.compare(currentLinePosition, 1, ")") != 0 )
         {
@@ -224,7 +230,7 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
             if ( assertPair.first == Undefined )
                 assertPair.first = returnPair.first;
             else if ( assertPair.first != returnPair.first )
-                throw std::invalid_argument("Not in standard vnnlib file format.8");
+                throw std::invalid_argument("Not in standard vnnlib file format.");
 
             assertPair.second.phi.addMinimum( returnPair.second.phi );
             assertPair.second.Phi.insert(assertPair.second.Phi.end(),
@@ -238,7 +244,7 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
         nextNonSpace();
 
         if ( currentVnnlibLine.compare(currentLinePosition, 1, "(") != 0 )
-            throw std::invalid_argument("Not in standard vnnlib file format.9");
+            throw std::invalid_argument("Not in standard vnnlib file format.");
 
         while ( currentVnnlibLine.compare(currentLinePosition, 1, ")") != 0 )
         {
@@ -247,7 +253,7 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
             if ( assertPair.first == Undefined )
                 assertPair.first = returnPair.first;
             else if ( assertPair.first != returnPair.first )
-                throw std::invalid_argument("Not in standard vnnlib file format.10");
+                throw std::invalid_argument("Not in standard vnnlib file format.");
 
             assertPair.second.phi.addMaximum( returnPair.second.phi );
             assertPair.second.Phi.insert(assertPair.second.Phi.end(),
@@ -268,10 +274,10 @@ std::pair<VnnlibProperty::AssertType,lukaFormula::Modsat> VnnlibProperty::parseV
         assertPair = parseVnnlibAtomicAssert(GreaterEq);
     }
     else
-        throw std::invalid_argument("Not in standard vnnlib file format.11");
+        throw std::invalid_argument("Not in standard vnnlib file format.");
 
     if ( currentVnnlibLine.compare(currentLinePosition, 1, ")") != 0 )
-        throw std::invalid_argument("Not in standard vnnlib file format.12");
+        throw std::invalid_argument("Not in standard vnnlib file format.");
 
     currentLinePosition += 1;
     nextNonSpace();
@@ -285,9 +291,17 @@ void VnnlibProperty::readDeclarations()
 
     while ( !finished )
     {
-        if ( currentVnnlibLine.compare(currentLinePosition, 14, "(declare-const") == 0 )
+        if ( currentVnnlibLine.compare(currentLinePosition, 1, "(") != 0 )
+            throw std::invalid_argument("Not in standard vnnlib file format.");
+        else
         {
-            currentLinePosition += 14;
+            currentLinePosition++;
+            nextNonSpace();
+        }
+
+        if ( currentVnnlibLine.compare(currentLinePosition, 13, "declare-const") == 0 )
+        {
+            currentLinePosition += 13;
 
             if ( !nextNonSpace() )
                 throw std::invalid_argument("Not in standard vnnlib file format.");
@@ -311,13 +325,27 @@ void VnnlibProperty::readDeclarations()
 
 void VnnlibProperty::vnnlib2property()
 {
+    bool firstIteration = true;
     bool finished = false;
 
     while ( !finished )
     {
-        if ( currentVnnlibLine.compare(currentLinePosition, 7, "(assert") == 0 )
+        if ( firstIteration )
+            firstIteration = false;
+        else
         {
-            currentLinePosition += 7;
+            if ( currentVnnlibLine.compare(currentLinePosition, 1, "(") != 0 )
+                finished = true;
+            else
+            {
+                currentLinePosition++;
+                nextNonSpace();
+            }
+        }
+
+        if ( !finished && currentVnnlibLine.compare(currentLinePosition, 6, "assert") == 0 )
+        {
+            currentLinePosition += 6;
 
             if ( !nextNonSpace() )
                 throw std::invalid_argument("Not in standard vnnlib file format.");
@@ -340,8 +368,6 @@ void VnnlibProperty::vnnlib2property()
                                         assertReturn.Phi.end());
             }
         }
-        else
-            finished = true;
     }
 }
 

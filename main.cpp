@@ -10,6 +10,7 @@ bool printPwl = false;
 bool printLimodsat = false;
 bool printLiprop = false;
 bool hasOnnx = false;
+bool robust = false;
 bool vnnlib = false;
 
 std::string onnxFileName;
@@ -59,7 +60,7 @@ void onlyIntermediateSteps()
 }
 
 void vnnlibRoutine()
-{ // for testing purposes
+{
     pwl2limodsat::VariableManager vm;
     reluka::VnnlibProperty vnnlib( vnnlibFileName, &vm );
     vnnlib.buildVnnlibProperty();
@@ -92,9 +93,9 @@ void vnnlibRoutine()
         vnnlib.printLipropFile();
 }
 
-void globalRobustnessRoutine(std::string arg)
+void globalRobustnessRoutine()
 {
-    reluka::OnnxParser onnx( arg );
+    reluka::OnnxParser onnx( onnxFileName );
     reluka::NeuralNetwork nn(onnx.getNeuralNetwork(), onnx.getOnnxFileName());
     nn.buildPwlData();
     pwl2limodsat::VariableManager vm( nn.getInputDimension() );
@@ -118,8 +119,15 @@ void globalRobustnessRoutine(std::string arg)
             pwl.back().representModsat();
     }
 
-    reluka::GlobalRobustness globalRobust(onnx.getOnnxFileName(), nn.getInputDimension(), nn.getOutputDimension(), &pwl, 0.5, &vm);
-    globalRobust.printLipropFile();
+    reluka::GlobalRobustness globalRobust(onnx.getOnnxFileName(),
+                                          nn.getInputDimension(),
+                                          nn.getOutputDimension(),
+                                          &pwl,
+                                          0.5,
+                                          &vm);
+
+    if ( printLiprop )
+        globalRobust.printLipropFile();
 }
 
 int main(int argc, char **argv)
@@ -140,15 +148,8 @@ int main(int argc, char **argv)
             printLimodsat = true;
             printLiprop = true;
         }
-        else if ( arg.compare("-onnx") == 0 )
-        {
-            argNum++;
-            arg = argv[argNum];
-            if ( arg.compare(0, 1, "-") == 0 )
-                throw std::invalid_argument("Missing onnx file path.");
-            onnxFileName = arg;
-            hasOnnx = true;
-        }
+        else if ( arg.compare("-robust") == 0 )
+            robust = true;
         else if ( arg.compare("-vnnlib") == 0 )
         {
             argNum++;
@@ -158,21 +159,27 @@ int main(int argc, char **argv)
             vnnlibFileName = arg;
             vnnlib = true;
         }
+        else if ( arg.compare("-onnx") == 0 )
+        {
+            argNum++;
+            arg = argv[argNum];
+            if ( arg.compare(0, 1, "-") == 0 )
+                throw std::invalid_argument("Missing onnx file path.");
+            onnxFileName = arg;
+            hasOnnx = true;
+        }
     }
-/*
+
     if ( !hasOnnx )
         usage("A onnx file must be provided");
-    else if ( !vnnlib )
+    else if ( !vnnlib && !robust )
         onlyIntermediateSteps();
+    else if ( robust )
+        globalRobustnessRoutine();
     else if ( vnnlib )
         vnnlibRoutine();
     else
         usage();
-*/
-    // for testing purposes
-    std::string arg(argv[1]);
-    globalRobustnessRoutine(arg);
-    //////
 
     return 0;
 }

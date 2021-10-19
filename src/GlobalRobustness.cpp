@@ -1,6 +1,8 @@
 #include "GlobalRobustness.h"
 #include "NeuralNetwork.h"
 
+#include <iostream> //tem q tirar
+
 namespace reluka
 {
 GlobalRobustness::GlobalRobustness(const std::vector<unsigned>& inputNnConsideredOutputIndexes,
@@ -146,7 +148,7 @@ void GlobalRobustness::buildPerturbationFormulas(pwl2limodsat::Variable firstPer
 
 void GlobalRobustness::buildPremisseAndConclusionFormulas()
 {
-    if ( nnInputDimension == 1 )
+    if ( nnOutputDimension == 1 )
     {
         if ( !variableManager->isThereConstant(2) )
             variableManager->newConstant(2);
@@ -165,11 +167,13 @@ void GlobalRobustness::buildPremisseAndConclusionFormulas()
 
 void GlobalRobustness::buildRobustnessProperty()
 {
-    buildCloneRepresentations();
-    buildPerturbationFormulas( buildEpsilonFormulas() );
-    buildPremisseAndConclusionFormulas();
-
-    propertyBuilding = true;
+    if ( !propertyBuilding )
+    {
+        buildCloneRepresentations();
+        buildPerturbationFormulas( buildEpsilonFormulas() );
+        buildPremisseAndConclusionFormulas();
+        propertyBuilding = true;
+    }
 }
 
 void GlobalRobustness::printLipropFile()
@@ -184,8 +188,8 @@ void GlobalRobustness::printLipropFile()
 
         for ( pwl2limodsat::PiecewiseLinearFunction pwl : *nnOutputAddresses )
         {
-            for ( pwl2limodsat::RegionalLinearPiece rlp : pwl.getLinearPieceCollection() )
-                rlp.printModsatSetAs(&propertyFile, "f:");
+            for ( pwl2limodsat::RegionalLinearPiece rlp : pwl.getLinearPieceCollection() ) {
+                rlp.printModsatSetAs(&propertyFile, "f:"); std::cout << "entrou" << std::endl;}
 
             propertyFile << "f:" << std::endl;
             pwl.getLatticeFormula().print(&propertyFile);
