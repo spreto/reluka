@@ -155,7 +155,7 @@ def runRandomPwlTest(fileName, inputDim, hiddenDim, hiddenNum):
 
     toOnnxInput = torch.as_tensor([0]*inputDim).float()
     torch.onnx.export(torchModel, toOnnxInput, data_folder+fileName+".onnx")
-    os.system(reluka_path+" "+data_folder+fileName+".onnx")
+    os.system(reluka_path+" -onnx "+data_folder+fileName+".onnx -pwl")
 
     pwlData = pwlFileParser(fileName+"_0.pwl")
 
@@ -303,7 +303,7 @@ def evaluateSmt(smtFileName):
 
     return evaluation
 
-def runLimodsatTest(fileName, torchModel, inputDim, latticePropertyMessage):
+def runLimodsatTest(fileName, torchModel, inputDim):
     global summary
     results = []
     statistics = [0,0]
@@ -313,7 +313,7 @@ def runLimodsatTest(fileName, torchModel, inputDim, latticePropertyMessage):
         for j in range(inputDim):
             x.append(random.uniform(0,1))
     
-        createSmt(fileName+".limodsat", fileName+"_"+str(i)+".smt", inputDim, x)
+        createSmt(fileName+"_0.limodsat", fileName+"_"+str(i)+".smt", inputDim, x)
         torchValue = torchModel(torch.as_tensor(x).float())
         modsatValue = evaluateSmt(fileName+"_"+str(i)+".smt")
         os.system("rm "+data_folder+fileName+"_"+str(i)+".smt")
@@ -335,7 +335,7 @@ def runLimodsatTest(fileName, torchModel, inputDim, latticePropertyMessage):
 
     resultsFile = open(data_folder+fileName+".res", "w")
 
-    message = fileName + ": " + latticePropertyMessage + " :: "
+    message = fileName + ": "
     if not statistics[1]:
         message += "PASSED ALL EVALUATIONS!!!"
     elif not statistics[0]:
@@ -361,9 +361,9 @@ def runRandomLimodsatTest(fileName, inputDim, hiddenDim, hiddenNum):
     toOnnxInput = torch.as_tensor([0]*inputDim).float()
     torch.onnx.export(torchModel, toOnnxInput, data_folder+fileName+".onnx")
 
-    latticePropertyMessage = subprocess.check_output([reluka_path, data_folder+fileName+".onnx"]).decode(sys.stdout.encoding).rstrip("\n")
+    os.system(reluka_path+" -onnx "+data_folder+fileName+".onnx -limodsat")
 
-    runLimodsatTest(fileName, torchModel, inputDim, latticePropertyMessage)
+    runLimodsatTest(fileName, torchModel, inputDim)
 
 def runMultiPwlTest(fileName, torchModel, pwlData):
     global summary
@@ -424,7 +424,7 @@ def runRandomMultiPwlTest(fileName, inputDim, hiddenDim, hiddenNum, outputDim):
     toOnnxInput = torch.as_tensor([0]*inputDim).float()
     torch.onnx.export(torchModel, toOnnxInput, data_folder+fileName+".onnx")
 
-    os.system(reluka_path+" "+data_folder+fileName+".onnx")
+    os.system(reluka_path+" -onnx "+data_folder+fileName+".onnx -pwl")
 
     for outputNum in range(outputDim):
         pwlData = pwlFileParser(fileName+"_"+str(outputNum)+".pwl")
@@ -450,7 +450,7 @@ def createSummary():
     summary_file.close()
 
 #############################
-TEST_MODE = TestMode.MultiPWL
+TEST_MODE = TestMode.ELSE
 
 SINGLE_CONFIG_TEST_NUM = 1
 SINGLE_NN_TEST_NUM = 10
@@ -510,4 +510,11 @@ elif TEST_MODE is TestMode.MultiPWL:
     createSummary()
 
 elif TEST_MODE is TestMode.ELSE:
-    print("else")
+    data_folder = "./elseTest/"
+
+    fileName = "test_1_1_1_n1"
+    inputDim = 1
+
+    torchModel = torch.load(data_folder+fileName+".torch")
+
+    runLimodsatTest(fileName, torchModel, inputDim)
