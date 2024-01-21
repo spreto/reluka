@@ -12,6 +12,8 @@ class OnnxParser
         OnnxParser(std::string inputOnnxFileName);
         NeuralNetworkData getNeuralNetwork();
         std::string getOnnxFileName() { return onnxFileName; }
+        void normalizeInput( unsigned inputNum, double inputMin, double inputMax );
+        void centralizeOutput( unsigned outputNum, double center );
 
     private:
         onnx::ModelProto onnxNeuralNetwork;

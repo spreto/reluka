@@ -1,8 +1,11 @@
 #include <iostream>
+#include "OnnxParser4rainForecast.h"
+#include "OnnxParser4ACASXu.h"
 #include "OnnxParser.h"
 #include "NeuralNetwork.h"
 #include "VariableManager.h"
 #include "PiecewiseLinearFunction.h"
+#include "InequalityConstraints.h"
 #include "VnnlibProperty.h"
 #include "GlobalRobustness.h"
 
@@ -10,10 +13,14 @@ bool printPwl = false;
 bool printLimodsat = false;
 bool printLiprop = false;
 bool hasOnnx = false;
+bool ineqcons = false;
 bool robust = false;
 bool vnnlib = false;
 
+bool verifyLatticeProperty = true;
+
 std::string onnxFileName;
+std::string ineqconsFileName;
 std::string vnnlibFileName;
 
 void usage(std::string errorMessage)
@@ -59,6 +66,47 @@ void onlyIntermediateSteps()
     }
 }
 
+void inequalityConstraintsRoutine()
+{
+    pwl2limodsat::VariableManager vm;
+    reluka::InequalityConstraints ineqcons( ineqconsFileName, &vm );
+    ineqcons.buildIneqconsProperty();
+//    reluka::OnnxParser4rainForecast onnx( onnxFileName );
+    reluka::OnnxParser4ACASXu onnx( onnxFileName );
+//    reluka::OnnxParser onnx( onnxFileName );
+
+    std::map<unsigned,std::pair<double,double>> inputLimits = ineqcons.getInputLimits();
+    for ( auto& x : inputLimits )
+        onnx.normalizeInput(x.first, x.second.first, x.second.second);
+    std::map<unsigned,std::tuple<outputLimitsType,double,double>> outputLimits = ineqcons.getOutputLimits();
+    for ( auto& x : outputLimits )
+        onnx.centralizeOutput(x.first, std::get<1>(x.second));
+std::cout << "Terminou onnx pra nn." << std::endl;
+    reluka::NeuralNetwork nn(onnx.getNeuralNetwork(), ineqcons.getNnOutputIndexes(), onnx.getOnnxFileName());
+    nn.buildPwlData();
+std::cout << "Terminou nn pra regional" << std::endl;
+    std::vector<pwl2limodsat::PiecewiseLinearFunction> pwl;
+
+    for ( unsigned nnOutputIdx : nn.getNnOutputIndexes() )
+    {
+        if ( printPwl )
+            nn.printPwlFile( nnOutputIdx );
+
+        pwl2limodsat::PiecewiseLinearFunction pwlAux( nn.getPwlData(nnOutputIdx),
+                                                      nn.getBoundProtData(),
+                                                      nn.getPwlFileName(nnOutputIdx),
+                                                      &vm );
+        pwl.push_back( pwlAux );
+
+        if ( printLimodsat )
+            pwl.back().printLimodsatFile();
+        else
+            pwl.back().representModsat();
+    }
+
+    ineqcons.setOutputAddresses( &pwl );
+}
+
 void vnnlibRoutine()
 {
     pwl2limodsat::VariableManager vm;
@@ -79,6 +127,10 @@ void vnnlibRoutine()
                                                       nn.getBoundProtData(),
                                                       nn.getPwlFileName(nnOutputIdx),
                                                       &vm );
+
+        if ( verifyLatticeProperty && !pwlAux.hasLatticeProperty() )
+            throw std::domain_error("Pre-regional format without the lattice property.");
+
         pwl.push_back( pwlAux );
 
         if ( printLimodsat )
@@ -136,6 +188,8 @@ int main(int argc, char **argv)
     {
         std::string arg(argv[argNum]);
 
+        if ( arg.compare("-without-lp") == 0 )
+            verifyLatticeProperty = false;
         if ( arg.compare("-pwl") == 0 )
             printPwl = true;
         else if ( arg.compare("-limodsat") == 0 )
@@ -148,8 +202,15 @@ int main(int argc, char **argv)
             printLimodsat = true;
             printLiprop = true;
         }
-        else if ( arg.compare("-robust") == 0 )
-            robust = true;
+        else if ( arg.compare("-ineqcons") == 0 )
+        {
+            argNum++;
+            arg = argv[argNum];
+            if ( arg.compare(0, 1, "-") == 0 )
+                throw std::invalid_argument("Missing inequality constraints file path.");
+            ineqconsFileName = arg;
+            ineqcons = true;
+        }
         else if ( arg.compare("-vnnlib") == 0 )
         {
             argNum++;
@@ -159,6 +220,8 @@ int main(int argc, char **argv)
             vnnlibFileName = arg;
             vnnlib = true;
         }
+        else if ( arg.compare("-robust") == 0 )
+            robust = true;
         else if ( arg.compare("-onnx") == 0 )
         {
             argNum++;
@@ -172,8 +235,10 @@ int main(int argc, char **argv)
 
     if ( !hasOnnx )
         usage("A onnx file must be provided");
-    else if ( !vnnlib && !robust )
+    else if ( !ineqcons && !vnnlib && !robust )
         onlyIntermediateSteps();
+    else if ( ineqcons )
+        inequalityConstraintsRoutine();
     else if ( robust )
         globalRobustnessRoutine();
     else if ( vnnlib )

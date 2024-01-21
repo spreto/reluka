@@ -109,4 +109,24 @@ NeuralNetworkData OnnxParser::getNeuralNetwork()
 
     return neuralNetwork;
 }
+
+void OnnxParser::normalizeInput( unsigned inputNum, double inputMin, double inputMax )
+{
+    if ( !netTranslation )
+        onnx2net();
+
+    for ( Node node : neuralNetwork.at(0) )
+    {
+        node.at(0) += ( node.at(0)*inputMin ); std::cout << node.at(inputNum+1) << "  ";
+        node.at(inputNum+1) *= ( inputMax-inputMin ); std::cout << node.at(inputNum+1) << std::endl;
+    }
+}
+
+void OnnxParser::centralizeOutput( unsigned outputNum, double center )
+{
+    if ( !netTranslation )
+        onnx2net();
+
+    neuralNetwork.back().at(outputNum).at(0) += ( 0.5 - center );
+}
 }
