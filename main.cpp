@@ -1,5 +1,4 @@
 #include <iostream>
-#include "OnnxParser4rainForecast.h"
 #include "OnnxParser4ACASXu.h"
 #include "OnnxParser.h"
 #include "NeuralNetwork.h"
@@ -18,6 +17,7 @@ bool robust = false;
 bool vnnlib = false;
 
 bool verifyLatticeProperty = true;
+bool latticePropertyCounter = false;
 
 std::string onnxFileName;
 std::string ineqconsFileName;
@@ -56,12 +56,19 @@ void onlyIntermediateSteps()
         if ( printPwl )
             nn.printPwlFile(outIdx);
 
-        if ( printLimodsat )
+        if ( printLimodsat || verifyLatticeProperty || latticePropertyCounter )
         {
             pwl2limodsat::PiecewiseLinearFunction pwl( nn.getPwlData(outIdx),
                                                        nn.getBoundProtData(),
                                                        nn.getPwlFileName(outIdx) );
-            pwl.printLimodsatFile();
+
+            if ( verifyLatticeProperty && !pwl.hasLatticeProperty() )
+                throw std::domain_error("Pre-regional format without the lattice property.");
+            else if ( latticePropertyCounter )
+                std::cout << "out" << outIdx << ": " << pwl.latticePropertyCounter() << std::endl;
+
+            if ( printLimodsat )
+                pwl.printLimodsatFile();
         }
     }
 }
@@ -71,9 +78,7 @@ void inequalityConstraintsRoutine()
     pwl2limodsat::VariableManager vm;
     reluka::InequalityConstraints ineqcons( ineqconsFileName, &vm );
     ineqcons.buildIneqconsProperty();
-//    reluka::OnnxParser4rainForecast onnx( onnxFileName );
     reluka::OnnxParser4ACASXu onnx( onnxFileName );
-//    reluka::OnnxParser onnx( onnxFileName );
 
     std::map<unsigned,std::pair<double,double>> inputLimits = ineqcons.getInputLimits();
     for ( auto& x : inputLimits )
@@ -81,10 +86,10 @@ void inequalityConstraintsRoutine()
     std::map<unsigned,std::tuple<outputLimitsType,double,double>> outputLimits = ineqcons.getOutputLimits();
     for ( auto& x : outputLimits )
         onnx.centralizeOutput(x.first, std::get<1>(x.second));
-std::cout << "Terminou onnx pra nn." << std::endl;
+
     reluka::NeuralNetwork nn(onnx.getNeuralNetwork(), ineqcons.getNnOutputIndexes(), onnx.getOnnxFileName());
     nn.buildPwlData();
-std::cout << "Terminou nn pra regional" << std::endl;
+
     std::vector<pwl2limodsat::PiecewiseLinearFunction> pwl;
 
     for ( unsigned nnOutputIdx : nn.getNnOutputIndexes() )
@@ -190,6 +195,11 @@ int main(int argc, char **argv)
 
         if ( arg.compare("-without-lp") == 0 )
             verifyLatticeProperty = false;
+        if ( arg.compare("-lpcount") == 0 )
+        {
+            verifyLatticeProperty = false;
+            latticePropertyCounter = true;
+        }
         if ( arg.compare("-pwl") == 0 )
             printPwl = true;
         else if ( arg.compare("-limodsat") == 0 )

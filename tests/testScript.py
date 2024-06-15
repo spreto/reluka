@@ -1,4 +1,5 @@
-#!/usr/bin/python3.8
+#!/var/tmp/spreto/anaconda3/bin/python
+#!/usr/bin/python3
 
 from enum import Enum
 
@@ -7,14 +8,18 @@ class TestMode(Enum):
     PWL = 1
     MultiPWL = 2
     LIMODSAT = 3
+    countPWLvarLayers = 4
+    countPWLvarNodes = 5
 
 PRECISION = 5
 DECPRECISION_form = ".5f"
 reluka_path = "../bin/Release/reluka"
-yices_path = "yices-smt2"
+yices_path = "/var/tmp/spreto/yices-smt2"
+#yices_path = "yices-smt2"
 
 import torch
 import torch.onnx
+import csv
 import os
 import sys
 import subprocess
@@ -449,19 +454,61 @@ def createSummary():
 
     summary_file.close()
 
-#############################
-TEST_MODE = TestMode.ELSE
+def runRandomPwlCountTest(fileName, inputDim, hiddenDim, hiddenNum):
+    global summary
 
-SINGLE_CONFIG_TEST_NUM = 1
-SINGLE_NN_TEST_NUM = 10
-MAX_INPUTS = 4
-MAX_OUTPUTS = 5
-MAX_NODES = 7
-MAX_LAYERS = 2
-#############################
+    message = [fileName]
+    messageLP = []
+
+    for config in range(SINGLE_CONFIG_TEST_NUM):
+        fileNameBkp = fileName
+        fileName += "_n"+str(config+1)
+
+        torchModel = RandPwlNeuralNet(inputDim, hiddenDim, hiddenNum)
+        torch.save(torchModel, data_folder+fileName+".torch")
+
+        toOnnxInput = torch.as_tensor([0]*inputDim).float()
+        torch.onnx.export(torchModel, toOnnxInput, data_folder+fileName+".onnx")
+        os.system(reluka_path+" -onnx "+data_folder+fileName+".onnx -pwl -lpcount > "+data_folder+"temp")
+
+        with open(data_folder+fileName+"_0.pwl", "r") as pwlFile:
+            cnt = 0
+            for line in pwlFile.readlines():
+                if line.startswith("p "):
+                    cnt += 1
+        message.append(str(cnt))
+
+        with open(data_folder+"temp") as tempFile:
+            msgAux = tempFile.read()[6:-1]
+            messageLP.append(msgAux)
+
+        fileName = fileNameBkp
+
+    summary.append(message+messageLP)
+
+    os.system("rm "+data_folder+"temp")
+
+######################################
+TEST_MODE = TestMode.countPWLvarLayers
+
+SINGLE_CONFIG_TEST_NUM = 25
+SINGLE_NN_TEST_NUM = 2
+MAX_INPUTS = 2
+MAX_OUTPUTS = 2
+MAX_NODES = 10
+MAX_LAYERS = 10
+
+# for countPWL
+NUM_FIX_NODES = 5
+NUM_FIX_LAYERS = 5
+######################################
 
 summary = []
 
+#
+# For each configuration of neural network with {1,...,MAX_INPUTS} inputs, one output, {1,...,MAX_NODES} nodes in each layer of {1,...,MAX_LAYERS} layers,
+# compare the evaluation of SINGLE_CONFIG_TEST_NUM neural networks to the evaluation of its .pwl representation, for SINGLE_NN_TEST_NUM random tests.
+#
 if TEST_MODE is TestMode.PWL:
     data_folder = "./pwlTestData/"
     setDataFolder()
@@ -477,6 +524,10 @@ if TEST_MODE is TestMode.PWL:
 
     createSummary()
 
+#
+# For each configuration of neural network with {1,...,MAX_INPUTS} inputs, one output, {1,...,MAX_NODES} nodes in each layer of {1,...,MAX_LAYERS} layers,
+# compare the evaluation of SINGLE_CONFIG_TEST_NUM neural networks to the evaluation of its .limodsat representation, for SINGLE_NN_TEST_NUM random tests.
+#
 elif TEST_MODE is TestMode.LIMODSAT:
     data_folder = "./limodsatTestData/"
     setDataFolder()
@@ -492,6 +543,11 @@ elif TEST_MODE is TestMode.LIMODSAT:
 
     createSummary()
 
+#
+# For each configuration of neural network with {1,...,MAX_INPUTS} inputs, {1,...,MAX_OUTPUTS} outputs, {1,...,MAX_NODES} nodes in each layer
+# of {1,...,MAX_LAYERS} layers, compare the evaluation of SINGLE_CONFIG_TEST_NUM neural networks to the evaluation of its .pwl representation,
+# for SINGLE_NN_TEST_NUM random tests.
+#
 elif TEST_MODE is TestMode.MultiPWL:
     data_folder = "./multiPwlTestData/"
     setDataFolder()
@@ -509,12 +565,63 @@ elif TEST_MODE is TestMode.MultiPWL:
 
     createSummary()
 
+#
+# For each configuration of neural network with NUM_FIX_NODES inputs, one output, NUM_FIX_NODES nodes in each layer of {1,...,MAX_LAYERS} layers,
+# count the number of nonempty regions in the .pwl representation of SINGLE_CONFIG_TEST_NUM neural networks. Also, count the number of pairs of regions
+# in the .pwl representation that fail to fulfill the lattice property.
+#
+elif TEST_MODE is TestMode.countPWLvarLayers:
+    data_folder = "./pwlCountVarLayersTestData_"+str(NUM_FIX_NODES)+"n_"+str(MAX_LAYERS)+"l/"
+    setDataFolder()
+
+    message = [""]
+    message.extend(range(1,SINGLE_CONFIG_TEST_NUM+1))
+    message.extend(range(1,SINGLE_CONFIG_TEST_NUM+1))
+    summary.append(message)
+
+    for layersNum in range(MAX_LAYERS):
+        runRandomPwlCountTest("test_"+str(NUM_FIX_NODES)+"n_"+str(layersNum+1)+"l",
+                              NUM_FIX_NODES,
+                              NUM_FIX_NODES,
+                              layersNum+1)
+
+    summary_file = open(data_folder+"summary.csv", "w")
+    summary_writer = csv.writer(summary_file)
+    for sum in summary:
+        summary_writer.writerow(sum)
+    summary_file.close()
+
+#
+# For each configuration of neural network with NUM_FIX_LAYERS layers, the same number {1,...,MAX_NODES} of inputs and nodes in each layer and one output,
+# count the number of nonempty regions in the .pwl representation of SINGLE_CONFIG_TEST_NUM neural networks. Also, count the number of pairs of regions
+# in the .pwl representation that fail to fulfill the lattice property.
+#
+elif TEST_MODE is TestMode.countPWLvarNodes:
+    data_folder = "./pwlCountVarNodesTestData_"+str(MAX_NODES)+"n_"+str(NUM_FIX_LAYERS)+"l/"
+    setDataFolder()
+
+    message = [""]
+    message.extend(range(1,SINGLE_CONFIG_TEST_NUM+1))
+    message.extend(range(1,SINGLE_CONFIG_TEST_NUM+1))
+    summary.append(message)
+
+    for nodesNum in range(MAX_NODES):
+        runRandomPwlCountTest("test_"+str(nodesNum+1)+"n_"+str(NUM_FIX_LAYERS)+"l",
+                              nodesNum+1,
+                              nodesNum+1,
+                              NUM_FIX_LAYERS)
+
+    summary_file = open(data_folder+"summary.csv", "w")
+    summary_writer = csv.writer(summary_file)
+    for sum in summary:
+        summary_writer.writerow(sum)
+    summary_file.close()
+
+#
+# Something else.
+#
 elif TEST_MODE is TestMode.ELSE:
     data_folder = "./elseTest/"
+    setDataFolder()
 
-    fileName = "test_1_1_1_n1"
-    inputDim = 1
-
-    torchModel = torch.load(data_folder+fileName+".torch")
-
-    runLimodsatTest(fileName, torchModel, inputDim)
+#   something else here
