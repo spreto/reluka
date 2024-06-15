@@ -84,11 +84,11 @@ void OnnxParser::onnx2net()
     if ( currentNode == onnxNeuralNetwork.graph().node_size() )
         throw std::invalid_argument("Not a recognizable onnx format.");
 
-    while ( currentNode < onnxNeuralNetwork.graph().node_size() )
+    while ( currentNode < onnxNeuralNetwork.graph().node_size() - 2 )
     {
         if ( onnxNeuralNetwork.graph().node(currentNode).op_type().compare("MatMul") == 0 )
         {
-            if ( layerMulAddRelu(currentNode) && currentNode + 3 < onnxNeuralNetwork.graph().node_size() )
+            if ( layerMulAddRelu(currentNode) && currentNode + 3 < onnxNeuralNetwork.graph().node_size() - 2 )
                 throw std::invalid_argument("Not a recognizable onnx format.");
             currentNode = currentNode + 3;
         }
@@ -108,25 +108,5 @@ NeuralNetworkData OnnxParser::getNeuralNetwork()
         onnx2net();
 
     return neuralNetwork;
-}
-
-void OnnxParser::normalizeInput( unsigned inputNum, double inputMin, double inputMax )
-{
-    if ( !netTranslation )
-        onnx2net();
-
-    for ( Node node : neuralNetwork.at(0) )
-    {
-        node.at(0) += ( node.at(0)*inputMin ); std::cout << node.at(inputNum+1) << "  ";
-        node.at(inputNum+1) *= ( inputMax-inputMin ); std::cout << node.at(inputNum+1) << std::endl;
-    }
-}
-
-void OnnxParser::centralizeOutput( unsigned outputNum, double center )
-{
-    if ( !netTranslation )
-        onnx2net();
-
-    neuralNetwork.back().at(outputNum).at(0) += ( 0.5 - center );
 }
 }
