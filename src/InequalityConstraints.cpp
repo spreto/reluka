@@ -129,4 +129,12 @@ void InequalityConstraints::setOutputAddresses(std::vector<pwl2limodsat::Piecewi
 
     nnOutputAddresses = pwlAddresses;
 }
+/* ou esse (testar qual funciona):
+{
+    for ( size_t i = 0; i < nnOutputVariables.size(); i++ )
+        pwlAddresses->at(i).equivalentTo(nnOutputVariables.at(i));
+
+    nnOutputAddresses = pwlAddresses;
+}
+*/
 }
