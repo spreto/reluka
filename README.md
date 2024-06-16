@@ -1,6 +1,6 @@
 # ReŁUkasiewicz
 
-**ReŁUkasiewicz** extracts from a feedforward neural network with ReLU activation function in all neurons in its hidden layers and truncated identity function in all neurons in its output layer into the function computed by each output neuron in the pre-closed regional format.
+**ReŁUkasiewicz** translates a feedforward neural network with ReLU activation function in all neurons in its hidden layers and truncated identity function in all neurons in its output layer into the rational McNaughton functions computed by each output neuron in the pre-closed regional format.
 
 ## Theoretical Reference
 
