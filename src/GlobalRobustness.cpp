@@ -21,7 +21,7 @@ GlobalRobustness::GlobalRobustness(const std::vector<unsigned>& inputNnConsidere
     if ( nnOutputDimension != nnOutputAddresses->size() )
         throw std::invalid_argument("Pwl addresses size is not coherent.");
 
-    epsilon = NeuralNetwork::dec2frac(inputEpsilon);
+//    epsilon = NeuralNetwork::dec2frac(inputEpsilon);
 
     std::string generalPropertyFileName;
 

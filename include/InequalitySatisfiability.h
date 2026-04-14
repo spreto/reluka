@@ -1,5 +1,5 @@
-#ifndef INEQUALITYCONSTRAINTS_H
-#define INEQUALITYCONSTRAINTS_H
+#ifndef INEQUALITYSATISFIABILITY_H
+#define INEQUALITYSATISFIABILITY_H
 
 #include <string>
 #include <fstream>
@@ -11,14 +11,14 @@
 
 namespace reluka
 {
-class InequalityConstraints
+class InequalitySatisfiability
 {
     public:
-        InequalityConstraints(std::string ineqconsFileName,
-                              size_t inputDim,
-                              pwl2limodsat::VariableManager *varMan);
-        virtual ~InequalityConstraints();
-        void buildIneqconsProperty(std::map<unsigned,std::pair<double,double>> originalOutputLim);
+        InequalitySatisfiability(std::string ineqsatFileName,
+                                 size_t inputDim,
+                                 pwl2limodsat::VariableManager *varMan);
+        virtual ~InequalitySatisfiability();
+        void buildIneqsatProperty(std::map<unsigned,std::pair<double,double>> originalOutputLim);
         std::map<unsigned,std::pair<double,double>> getInputLimits();
         std::vector<unsigned> getNnOutputIndexes();
         void printLiproperty(NeuralNetworkModSat *nnms);
@@ -26,15 +26,15 @@ class InequalityConstraints
     protected:
 
     private:
-        std::ifstream ineqconsFile;
-        std::string currentIneqconsLine;
+        std::ifstream ineqsatFile;
+        std::string currentIneqsatLine;
         size_t currentLinePosition = 0;
         std::string propertyFileName;
 
         pwl2limodsat::VariableManager *variableManager;
 
-        bool ineqconsParsing = false;
-        bool ineqconsProperty = false;
+        bool ineqsatParsing = false;
+        bool ineqsatProperty = false;
 
         std::map<unsigned,std::pair<double,double>> nnInputLimits;
         std::map<unsigned,std::pair<double,double>> nnOutputLimits;
@@ -42,11 +42,10 @@ class InequalityConstraints
         std::vector<unsigned> nnOutputIndexes;
         std::vector<pwl2limodsat::PiecewiseLinearFunction> *nnOutputAddresses;
 
-        std::vector<lukaFormula::Formula> premises;
-        lukaFormula::Formula conclusion;
+        std::vector<lukaFormula::Formula> instance;
 
-        void parseIneqcons();
+        void parseIneqsat();
 };
 }
 
-#endif // INEQUALITYCONSTRAINTS_H
+#endif // INEQUALITYSATISFIABILITY_H

@@ -1,5 +1,5 @@
 /*
-    The code in this file may be found in
+    The code in this file is a derivative of the code found in
     http://github.com/spreto/pwl2limodsat
     and is available under the following license.
 
@@ -29,17 +29,26 @@
 #include <cmath>
 #include "LinearPiece.h"
 
+#include <iostream> // debudinnnggg
+
 namespace pwl2limodsat
 {
 LinearPiece::LinearPiece(const LinearPieceData& data, VariableManager *varMan) :
     linearPieceData(data),
     dim(linearPieceData.size()-1),
-    var(varMan) {}
+    var(varMan)
+{
+    for ( size_t i = 1; i <= dim; i++ )
+        inVariables.push_back(Variable(i));
+}
 
 LinearPiece::LinearPiece(const LinearPieceData& data, std::string inputFileName) :
     linearPieceData(data),
     dim(linearPieceData.size()-1)
 {
+    for ( size_t i = 1; i <= dim; i++ )
+        inVariables.push_back(Variable(i));
+
     var = new VariableManager(dim);
     ownVariableManager = true;
 
@@ -50,6 +59,14 @@ LinearPiece::LinearPiece(const LinearPieceData& data, std::string inputFileName)
 
     outputFileName.append(".limodsat");
 }
+
+LinearPiece::LinearPiece(const LinearPieceData& data,
+                         const std::vector<pwl2limodsat::Variable>& inputVariables,
+                         VariableManager *varMan) :
+    linearPieceData(data),
+    inVariables(inputVariables),
+    dim(linearPieceData.size()-1),
+    var(varMan) {}
 
 LinearPiece::~LinearPiece()
 {
@@ -266,18 +283,18 @@ void LinearPiece::pwl2limodsat()
                         if ( alphas.at(indexes[J].at(j)) == betas.at(indexes[J].at(j)) )
                         {
                             representation[J].phi.addLukaDisjunction(msAux.phi);
-                            representation[J].Phi.push_back(Formula(msAux.phi, Formula(indexes[J].at(j)), Equiv));
+                            representation[J].Phi.push_back(Formula(msAux.phi, Formula(inVariables.at(indexes[J].at(j)-1)), Equiv));
                         }
                         else if ( alphas.at(indexes[J].at(j)) < betas.at(indexes[J].at(j)) )
                         {
                             representation[J].phi.addLukaDisjunction(variableSecondMultiplication(Min,auxVar));
-                            representation[J].Phi.push_back(Formula(msAux.phi, Formula(indexes[J].at(j)), Equiv));
+                            representation[J].Phi.push_back(Formula(msAux.phi, Formula(inVariables.at(indexes[J].at(j)-1)), Equiv));
                         }
                         else
                         {
                             representation[J].phi.addLukaDisjunction(msAux.phi);
                             representation[J].Phi.push_back( Formula(variableSecondMultiplication(Min,auxVar),
-                                                                     Formula(indexes[J].at(j)),
+                                                                     Formula(inVariables.at(indexes[J].at(j)-1)),
                                                                      Equiv) );
                         }
 
@@ -312,6 +329,22 @@ Modsat LinearPiece::getRepresentationModsat()
         representModsat();
 
     return representationModsat;
+}
+
+Formula LinearPiece::getRepresentativeFormula()
+{
+    if ( !modsatTranslation )
+        representModsat();
+
+    return representationModsat.phi;
+}
+
+ModsatSet LinearPiece::getModsatSet()
+{
+    if ( !modsatTranslation )
+        representModsat();
+
+    return representationModsat.Phi;
 }
 
 void LinearPiece::printModsatSetAs(std::ofstream *output, std::string intro)

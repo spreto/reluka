@@ -9,9 +9,9 @@ Preto, S. and Finger, M. 2023. Effective reasoning over neural networks using Ł
 
 ## Installation
 
-You must have in your computer the compilers **gcc** and **g++**, the **protobuf**, **pthread**, **GMP** and **zlib** libraries and the **SoPlex** callable library [(soplex.zib.de)](https://soplex.zib.de/).
+You must have in your computer the compilers **gcc** and **g++**, the **protobuf** (v. 3.18.0), **pthread**, **GMP** and **zlib** libraries and the **SoPlex** (v. 5.0.1) callable library [(soplex.zib.de)](https://soplex.zib.de/).
 
-To compile **pwl2limodsat**, all you have to do is type, at the root of the distribution directory:
+To compile **reluka**, all you have to do is type, at the root of the distribution directory:
 
 > $ make
 

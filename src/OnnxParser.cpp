@@ -4,9 +4,24 @@
 
 namespace reluka
 {
-OnnxParser::OnnxParser(std::string inputOnnxFileName) : onnxFileName(inputOnnxFileName)
+OnnxParser::OnnxParser(std::string inputOnnxFileName)
+    : onnxFileName(inputOnnxFileName),
+      acasxu(false)
 {
     std::ifstream onnxFile(inputOnnxFileName, std::ios_base::binary);
+    if (!onnxFile)
+        throw std::runtime_error("Cannot open ONNX file: " + inputOnnxFileName);
+    onnxNeuralNetwork.ParseFromIstream(&onnxFile);
+    onnxFile.close();
+}
+
+OnnxParser::OnnxParser(std::string inputOnnxFileName, bool inputAcasxu)
+    : onnxFileName(inputOnnxFileName),
+      acasxu(inputAcasxu)
+{
+    std::ifstream onnxFile(inputOnnxFileName, std::ios_base::binary);
+    if (!onnxFile)
+        throw std::runtime_error("Cannot open ONNX file: " + inputOnnxFileName);
     onnxNeuralNetwork.ParseFromIstream(&onnxFile);
     onnxFile.close();
 }
@@ -21,13 +36,12 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
         throw std::invalid_argument("Not a recognizable onnx format."); */
 
     int biasIdx = 0;
-//    while ( onnxNeuralNetwork.graph().initializer(biasIdx).name().compare( onnxNeuralNetwork.graph().node(beginingNode+1).input(1) ) != 0 )
     while ( onnxNeuralNetwork.graph().initializer(biasIdx).name().compare( onnxNeuralNetwork.graph().node(beginingNode+1).input(0) ) != 0 )
     {
         biasIdx++;
 
         if ( biasIdx == onnxNeuralNetwork.graph().initializer_size() )
-            throw std::invalid_argument("Not a recognizable onnx format.");
+            throw std::invalid_argument("Not a recognizable onnx format. 1");
     }
 
     int weightsIdx = 0;
@@ -36,12 +50,12 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
         weightsIdx++;
 
         if ( weightsIdx == onnxNeuralNetwork.graph().initializer_size() )
-            throw std::invalid_argument("Not a recognizable onnx format.");
+            throw std::invalid_argument("Not a recognizable onnx format. 2");
     }
 
     if ( ( onnxNeuralNetwork.graph().initializer(biasIdx).dims_size() != 1 ) ||
          ( onnxNeuralNetwork.graph().initializer(biasIdx).dims(0) != onnxNeuralNetwork.graph().initializer(weightsIdx).dims(1) ) )
-        throw std::invalid_argument("Not a recognizable onnx format.");
+        throw std::invalid_argument("Not a recognizable onnx format. 3");
 
     Layer lay;
 
@@ -72,7 +86,7 @@ unsigned OnnxParser::layerMulAddRelu(unsigned beginingNode)
     return 0;
 }
 
-void OnnxParser::onnx2net()
+void OnnxParser::onnx2netRegular()
 {
     int currentNode = 0;
 
@@ -82,24 +96,69 @@ void OnnxParser::onnx2net()
         currentNode++;
 
     if ( currentNode == onnxNeuralNetwork.graph().node_size() )
-        throw std::invalid_argument("Not a recognizable onnx format.");
+        throw std::invalid_argument("Not a recognizable onnx format. 4");
 
     while ( currentNode < onnxNeuralNetwork.graph().node_size() - 2 )
     {
         if ( onnxNeuralNetwork.graph().node(currentNode).op_type().compare("MatMul") == 0 )
         {
             if ( layerMulAddRelu(currentNode) && currentNode + 3 < onnxNeuralNetwork.graph().node_size() - 2 )
-                throw std::invalid_argument("Not a recognizable onnx format.");
+                throw std::invalid_argument("Not a recognizable onnx format. 5");
             currentNode = currentNode + 3;
         }
         else
-        {
-            throw std::invalid_argument("Not a recognizable onnx format.");
-            currentNode++; // isso aqui faz sentido??
-        }
+            throw std::invalid_argument("Not a recognizable onnx format. 6");
     }
 
     netTranslation = true;
+}
+
+void OnnxParser::getWeights(unsigned layNum)
+{
+    Layer lay;
+
+    for ( auto i = 0; i < onnxNeuralNetwork.graph().initializer(layNum).dims(1); i++ )
+    {
+        Node noh;
+        NodeCoefficient aux;
+
+        memcpy(&aux, &onnxNeuralNetwork.graph().initializer(layNum+1).raw_data()[4*i], sizeof(aux));
+        noh.push_back(aux);
+
+        for ( auto j = 0; j < onnxNeuralNetwork.graph().initializer(layNum).dims(0); j++ )
+        {
+            memcpy(&aux,
+                   &onnxNeuralNetwork.graph().initializer(layNum).raw_data()[4*((onnxNeuralNetwork.graph().initializer(layNum).dims(1)*j)+i)],
+                   sizeof(aux));
+            noh.push_back(aux);
+        }
+
+        lay.push_back(noh);
+    }
+
+    neuralNetwork.push_back(lay);
+}
+
+void OnnxParser::onnx2net4acasxu()
+{
+    unsigned layNum = 0;
+
+    while ( layNum < onnxNeuralNetwork.graph().initializer_size() )
+    {
+        if ( onnxNeuralNetwork.graph().initializer(layNum).name().back() == 'W' )
+            getWeights(layNum);
+        layNum++;
+    }
+
+    netTranslation = true;
+}
+
+void OnnxParser::onnx2net()
+{
+    if ( !acasxu )
+        onnx2netRegular();
+    else
+        onnx2net4acasxu();
 }
 
 NeuralNetworkData OnnxParser::getNeuralNetwork()
@@ -108,5 +167,25 @@ NeuralNetworkData OnnxParser::getNeuralNetwork()
         onnx2net();
 
     return neuralNetwork;
+}
+
+size_t OnnxParser::getInputDim()
+{
+    if ( !netTranslation )
+        onnx2net();
+
+    return neuralNetwork.at(0).at(0).size()-1;
+}
+
+void OnnxParser::normalizeInput( unsigned inputNum, double inputMin, double inputMax )
+{
+    if ( !netTranslation )
+        onnx2net();
+
+    for ( Node node : neuralNetwork.at(0) )
+    {
+        node.at(0) += ( node.at(inputNum)*inputMin );
+        node.at(inputNum) *= ( inputMax-inputMin );
+    }
 }
 }

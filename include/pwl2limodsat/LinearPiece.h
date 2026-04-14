@@ -1,5 +1,5 @@
 /*
-    The code in this file may be found in
+    The code in this file is a derivative of the code found in
     http://github.com/spreto/pwl2limodsat
     and is available under the following license.
 
@@ -44,10 +44,15 @@ class LinearPiece
     public:
         LinearPiece(const LinearPieceData& data, VariableManager *varMan);
         LinearPiece(const LinearPieceData& data, std::string inputFileName);
+        LinearPiece(const LinearPieceData& data,
+                    const std::vector<pwl2limodsat::Variable>& inputVariables,
+                    VariableManager *varMan);
         ~LinearPiece();
 
         void representModsat();
         Modsat getRepresentationModsat();
+        Formula getRepresentativeFormula();
+        ModsatSet getModsatSet();
         void printModsatSetAs(std::ofstream *output, std::string intro);
         void printModsatSet(std::ofstream *output);
         void printLimodsatFile();
@@ -63,10 +68,11 @@ class LinearPiece
 
     private:
         std::string outputFileName;
+        std::vector<pwl2limodsat::Variable> inVariables;
+        pwl2limodsat::VariableManager *var;
 
         Modsat representationModsat;
 
-        VariableManager *var;
         bool ownVariableManager = false;
         bool modsatTranslation = false;
 

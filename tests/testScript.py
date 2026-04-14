@@ -1,5 +1,6 @@
-#!/var/tmp/spreto/anaconda3/bin/python
-#!/usr/bin/python3
+#!/bin/python3
+##!/home/spreto/.local/pytorch_env/bin/python
+##!/var/tmp/spreto/anaconda3/bin/python
 
 from enum import Enum
 
@@ -14,8 +15,8 @@ class TestMode(Enum):
 PRECISION = 5
 DECPRECISION_form = ".5f"
 reluka_path = "../bin/Release/reluka"
-yices_path = "/var/tmp/spreto/yices-smt2"
-#yices_path = "yices-smt2"
+#yices_path = "/var/tmp/spreto/yices-smt2"
+yices_path = "yices-smt2"
 
 import torch
 import torch.onnx
@@ -489,18 +490,18 @@ def runRandomPwlCountTest(fileName, inputDim, hiddenDim, hiddenNum):
     os.system("rm "+data_folder+"temp")
 
 ######################################
-TEST_MODE = TestMode.countPWLvarLayers
+TEST_MODE = TestMode.LIMODSAT
 
-SINGLE_CONFIG_TEST_NUM = 25
+SINGLE_CONFIG_TEST_NUM = 2
 SINGLE_NN_TEST_NUM = 2
 MAX_INPUTS = 2
-MAX_OUTPUTS = 2
-MAX_NODES = 10
-MAX_LAYERS = 10
+MAX_OUTPUTS = 1
+MAX_NODES = 3
+MAX_LAYERS = 3
 
 # for countPWL
-NUM_FIX_NODES = 5
-NUM_FIX_LAYERS = 5
+NUM_FIX_NODES = 2
+NUM_FIX_LAYERS = 2
 ######################################
 
 summary = []

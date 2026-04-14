@@ -12,11 +12,11 @@ LD = g++
 WINDRES = windres
 
 INC = 
-CFLAGS = -Wall -std=c++17 -fexceptions
+CFLAGS = -Wall -fexceptions
 RCFLAGS = 
 RESINC = 
 LIBDIR = 
-LIB = -lprotobuf -lsoplex -lpthread -lz
+LIB = -lprotobuf -lsoplex -lpthread -lz -lgmp
 LDFLAGS = 
 
 INC_RELEASE = $(INC) -Iinclude -Iinclude/pwl2limodsat -Iinclude/onnx
@@ -30,7 +30,7 @@ OBJDIR_RELEASE = obj/Release
 DEP_RELEASE = 
 OUT_RELEASE = bin/Release/reluka
 
-OBJ_RELEASE = $(OBJDIR_RELEASE)/src/pwl2limodsat/VariableManager.o $(OBJDIR_RELEASE)/src/pwl2limodsat/RegionalLinearPiece.o $(OBJDIR_RELEASE)/src/pwl2limodsat/PiecewiseLinearFunction.o $(OBJDIR_RELEASE)/src/pwl2limodsat/LinearPiece.o $(OBJDIR_RELEASE)/src/pwl2limodsat/Formula.o $(OBJDIR_RELEASE)/src/onnx/onnx-ml.proto3.pb.o $(OBJDIR_RELEASE)/src/VnnlibProperty.o $(OBJDIR_RELEASE)/src/OnnxParser4ACASXu.o $(OBJDIR_RELEASE)/src/OnnxParser.o $(OBJDIR_RELEASE)/src/NeuralNetwork.o $(OBJDIR_RELEASE)/src/InequalityConstraints.o $(OBJDIR_RELEASE)/src/GlobalRobustness.o $(OBJDIR_RELEASE)/main.o
+OBJ_RELEASE = $(OBJDIR_RELEASE)/src/pwl2limodsat/VariableManager.o $(OBJDIR_RELEASE)/src/pwl2limodsat/RegionalLinearPiece.o $(OBJDIR_RELEASE)/src/pwl2limodsat/PiecewiseLinearFunction.o $(OBJDIR_RELEASE)/src/pwl2limodsat/LinearPiece.o $(OBJDIR_RELEASE)/src/pwl2limodsat/Formula.o $(OBJDIR_RELEASE)/src/onnx/onnx-ml.proto3.pb.o $(OBJDIR_RELEASE)/src/ZhangBolcskeiModSat.o $(OBJDIR_RELEASE)/src/VnnlibProperty.o $(OBJDIR_RELEASE)/src/OnnxParser.o $(OBJDIR_RELEASE)/src/NeuralNetworkModSat.o $(OBJDIR_RELEASE)/src/NeuralNetwork.o $(OBJDIR_RELEASE)/src/InequalitySatisfiability.o $(OBJDIR_RELEASE)/src/InequalityConstraints.o $(OBJDIR_RELEASE)/src/GlobalRobustness.o $(OBJDIR_RELEASE)/main.o
 
 all: release
 
@@ -68,17 +68,23 @@ $(OBJDIR_RELEASE)/src/pwl2limodsat/Formula.o: src/pwl2limodsat/Formula.cpp
 $(OBJDIR_RELEASE)/src/onnx/onnx-ml.proto3.pb.o: src/onnx/onnx-ml.proto3.pb.cc
 	$(CC) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/onnx/onnx-ml.proto3.pb.cc -o $(OBJDIR_RELEASE)/src/onnx/onnx-ml.proto3.pb.o
 
+$(OBJDIR_RELEASE)/src/ZhangBolcskeiModSat.o: src/ZhangBolcskeiModSat.cpp
+	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/ZhangBolcskeiModSat.cpp -o $(OBJDIR_RELEASE)/src/ZhangBolcskeiModSat.o
+
 $(OBJDIR_RELEASE)/src/VnnlibProperty.o: src/VnnlibProperty.cpp
 	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/VnnlibProperty.cpp -o $(OBJDIR_RELEASE)/src/VnnlibProperty.o
-
-$(OBJDIR_RELEASE)/src/OnnxParser4ACASXu.o: src/OnnxParser4ACASXu.cpp
-	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/OnnxParser4ACASXu.cpp -o $(OBJDIR_RELEASE)/src/OnnxParser4ACASXu.o
 
 $(OBJDIR_RELEASE)/src/OnnxParser.o: src/OnnxParser.cpp
 	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/OnnxParser.cpp -o $(OBJDIR_RELEASE)/src/OnnxParser.o
 
+$(OBJDIR_RELEASE)/src/NeuralNetworkModSat.o: src/NeuralNetworkModSat.cpp
+	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/NeuralNetworkModSat.cpp -o $(OBJDIR_RELEASE)/src/NeuralNetworkModSat.o
+
 $(OBJDIR_RELEASE)/src/NeuralNetwork.o: src/NeuralNetwork.cpp
 	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/NeuralNetwork.cpp -o $(OBJDIR_RELEASE)/src/NeuralNetwork.o
+
+$(OBJDIR_RELEASE)/src/InequalitySatisfiability.o: src/InequalitySatisfiability.cpp
+	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/InequalitySatisfiability.cpp -o $(OBJDIR_RELEASE)/src/InequalitySatisfiability.o
 
 $(OBJDIR_RELEASE)/src/InequalityConstraints.o: src/InequalityConstraints.cpp
 	$(CXX) $(CFLAGS_RELEASE) $(INC_RELEASE) -c src/InequalityConstraints.cpp -o $(OBJDIR_RELEASE)/src/InequalityConstraints.o

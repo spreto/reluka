@@ -1,11 +1,13 @@
 #include "InequalityConstraints.h"
 #include "LinearPiece.h"
+#include "NeuralNetwork.h"
 
 #include <iostream>
 
 namespace reluka
 {
 InequalityConstraints::InequalityConstraints(std::string ineqconsFileName,
+                                             size_t inputDim,
                                              pwl2limodsat::VariableManager *varMan) :
                                              variableManager(varMan)
 {
@@ -23,6 +25,8 @@ InequalityConstraints::InequalityConstraints(std::string ineqconsFileName,
         propertyFileName = ineqconsFileName;
 
     propertyFileName.append(".liprop");
+
+    variableManager->setDimension(inputDim);
 }
 
 InequalityConstraints::~InequalityConstraints()
@@ -50,28 +54,6 @@ void InequalityConstraints::parseIneqcons()
             double inputMax = stod(currentIneqconsLine.substr(currentLinePosition, blockLenght));
             nnInputLimits[inputNum] = std::pair<double,double>(inputMin,inputMax);
         }
-        else if ( currentIneqconsLine.compare(currentLinePosition, 2, "y>") == 0 )
-        {
-            currentLinePosition += 2;
-            size_t blockLenght = currentIneqconsLine.find_first_of(" ", currentLinePosition) - currentLinePosition;
-            unsigned outputNum = stoi(currentIneqconsLine.substr(currentLinePosition, blockLenght));
-            currentLinePosition += blockLenght+1;
-            blockLenght = currentIneqconsLine.size() - currentLinePosition;
-            double center = stod(currentIneqconsLine.substr(currentLinePosition, blockLenght));
-            nnOutputLimits[outputNum] = std::tuple<outputLimitsType,double,double>(GreaterEq,center,0);
-            nnOutputIndexes.push_back(outputNum);
-        }
-        else if ( currentIneqconsLine.compare(currentLinePosition, 2, "y<") == 0 )
-        {
-            currentLinePosition += 2;
-            size_t blockLenght = currentIneqconsLine.find_first_of(" ", currentLinePosition) - currentLinePosition;
-            unsigned outputNum = stoi(currentIneqconsLine.substr(currentLinePosition, blockLenght));
-            currentLinePosition += blockLenght+1;
-            blockLenght = currentIneqconsLine.size() - currentLinePosition;
-            double center = stod(currentIneqconsLine.substr(currentLinePosition, blockLenght));
-            nnOutputLimits[outputNum] = std::tuple<outputLimitsType,double,double>(LessEq,center,0);
-            nnOutputIndexes.push_back(outputNum);
-        }
         else if ( currentIneqconsLine.compare(currentLinePosition, 1, "y") == 0 )
         {
             currentLinePosition++;
@@ -83,58 +65,92 @@ void InequalityConstraints::parseIneqcons()
             currentLinePosition += blockLenght+1;
             blockLenght = currentIneqconsLine.size() - currentLinePosition;
             double outputMax = stod(currentIneqconsLine.substr(currentLinePosition, blockLenght));
-            nnOutputLimits[outputNum] = std::tuple<outputLimitsType,double,double>(Both,outputMin,outputMax);
+            nnOutputLimits[outputNum] = std::pair<double,double>(outputMin,outputMax);
             nnOutputIndexes.push_back(outputNum);
         }
     }
+
+    ineqconsParsing = true;
 }
 
-void InequalityConstraints::buildIneqconsProperty()
+void InequalityConstraints::buildIneqconsProperty( std::map<unsigned,std::pair<double,double>> originalOutputLim )
 {
-    parseIneqcons();
-    variableManager->setDimension(nnInputLimits.size());
+    if ( !ineqconsParsing )
+        parseIneqcons();
 
     for ( auto& x : nnOutputIndexes )
-        nnOutputVariables[x] = variableManager->newVariable();
+        nnOutputVariables.push_back(variableManager->newVariable());
 
-    for ( auto& x : nnOutputLimits )
+    for ( auto& lim : nnOutputLimits )
     {
-        if ( std::get<0>(x.second) == GreaterEq )
-        {
-            if ( !variableManager->isThereConstant(2) )
-                premises.push_back(pwl2limodsat::LinearPiece::defineConstant(variableManager, 2).back());
-            lukaFormula::Formula auxForm(variableManager->constant(2));
-            auxForm.addImplication(nnOutputVariables[x.first]);
-            if ( conclusion.isEmpty() )
-                conclusion = auxForm;
-            else
-                conclusion.addMinimum(auxForm);
-        }
-        else if ( std::get<0>(x.second) == LessEq )
-        {}
-        else if ( std::get<0>(x.second) == Both )
-        {}
+        lim.second = std::pair<double,double>( (lim.second.first - originalOutputLim[lim.first].first) /
+                                               (originalOutputLim[lim.first].second - originalOutputLim[lim.first].first),
+                                               (lim.second.second - originalOutputLim[lim.first].first) /
+                                               (originalOutputLim[lim.first].second - originalOutputLim[lim.first].first));
+
+        pwl2limodsat::LinearPieceCoefficient leftLim = reluka::NeuralNetwork::dec2frac(lim.second.first);
+        pwl2limodsat::LinearPieceCoefficient rightLim = reluka::NeuralNetwork::dec2frac(lim.second.second);
+
+        if ( !variableManager->isThereConstant(leftLim.second) )
+            premises.push_back(pwl2limodsat::LinearPiece::defineConstant(variableManager, leftLim.second).back());
+        lukaFormula::Modsat auxModsat = pwl2limodsat::LinearPiece::multiplyConstant(variableManager, leftLim.first, leftLim.second);
+        premises.insert(premises.end(), auxModsat.Phi.begin(), auxModsat.Phi.end());
+        auxModsat.phi.addImplication(lukaFormula::Formula(nnOutputVariables[lim.first]));
+        if ( conclusion.isEmpty() )
+            conclusion = auxModsat.phi;
+        else
+            conclusion.addMinimum(auxModsat.phi);
+
+        if ( !variableManager->isThereConstant(rightLim.second) )
+            premises.push_back(pwl2limodsat::LinearPiece::defineConstant(variableManager, rightLim.second).back());
+        auxModsat = pwl2limodsat::LinearPiece::multiplyConstant(variableManager, rightLim.first, rightLim.second);
+        premises.insert(premises.end(), auxModsat.Phi.begin(), auxModsat.Phi.end());
+        lukaFormula::Formula auxForm(nnOutputVariables[lim.first]);
+        auxForm.addImplication(auxModsat.phi);
+        conclusion.addMinimum(auxForm);
     }
-}
+/*
+    for ( minimais )
 
-void InequalityConstraints::setOutputAddresses(std::vector<pwl2limodsat::PiecewiseLinearFunction> *pwlAddresses)
-{
-    std::map<unsigned,pwl2limodsat::Variable>::iterator it = nnOutputVariables.begin();
-
-    for ( size_t i = 0; i < nnOutputVariables.size(); i++ )
-    {
-        pwlAddresses->at(i).equivalentTo(it->second);
-        it++;
-    }
-
-    nnOutputAddresses = pwlAddresses;
-}
-/* ou esse (testar qual funciona):
-{
-    for ( size_t i = 0; i < nnOutputVariables.size(); i++ )
-        pwlAddresses->at(i).equivalentTo(nnOutputVariables.at(i));
-
-    nnOutputAddresses = pwlAddresses;
-}
+    for ( maximais )
 */
+
+    ineqconsProperty = true;
+}
+
+std::map<unsigned,std::pair<double,double>> InequalityConstraints::getInputLimits()
+{
+    if ( !ineqconsParsing )
+        parseIneqcons();
+
+    return nnInputLimits;
+}
+
+std::vector<unsigned> InequalityConstraints::getNnOutputIndexes()
+{
+    if ( !ineqconsParsing )
+        parseIneqcons();
+
+    return nnOutputIndexes;
+}
+
+void InequalityConstraints::printLiproperty(NeuralNetworkModSat *nnms)
+{
+    if ( !ineqconsProperty )
+        buildIneqconsProperty(nnms->getOriginalOutputLim());
+
+    std::ofstream propertyFile(propertyFileName);
+    propertyFile << "Cons" << std::endl << std::endl;
+
+    nnms->printNNmodsat(&propertyFile, nnOutputVariables);
+
+    for ( lukaFormula::Formula form : premises )
+    {
+        propertyFile << "f:" << std::endl;
+        form.print(&propertyFile);
+    }
+
+    propertyFile << "C:" << std::endl;
+    conclusion.print(&propertyFile);
+}
 }
